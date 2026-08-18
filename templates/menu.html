@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        Меню — Restaurant OS
+    </title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+
+<body>
+
+<div class="app">
+
+
+    <!-- SIDEBAR -->
+
+    <aside class="sidebar">
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                R
+            </div>
+
+            <div>
+
+                <h2>
+                    Restaurant
+                </h2>
+
+                <span>
+                    OS
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <nav class="menu">
+
+            <a href="/"
+               class="menu-item">
+
+                <span>▦</span>
+
+                Главная
+
+            </a>
+
+
+            <a href="/tables"
+               class="menu-item">
+
+                <span>🪑</span>
+
+                Столики
+
+            </a>
+
+
+            <a href="#"
+               class="menu-item">
+
+                <span>🧾</span>
+
+                Заказы
+
+            </a>
+
+
+            <a href="/menu"
+               class="menu-item active">
+
+                <span>🍽️</span>
+
+                Меню
+
+            </a>
+
+
+            <a href="/kitchen"
+               class="menu-item">
+
+                <span>👨‍🍳</span>
+
+                Кухня
+
+            </a>
+
+
+            <a href="#"
+               class="menu-item">
+
+                <span>📦</span>
+
+                Склад
+
+            </a>
+
+
+            <a href="#"
+               class="menu-item">
+
+                <span>👥</span>
+
+                Сотрудники
+
+            </a>
+
+
+            <a href="#"
+               class="menu-item">
+
+                <span>📊</span>
+
+                Аналитика
+
+            </a>
+
+        </nav>
+
+
+        <div class="sidebar-bottom">
+
+            <a href="#"
+               class="menu-item">
+
+                <span>⚙️</span>
+
+                Настройки
+
+            </a>
+
+
+            <div class="user">
+
+                <div class="avatar">
+                    A
+                </div>
+
+                <div>
+
+                    <strong>
+                        Admin
+                    </strong>
+
+                    <small>
+                        Администратор
+                    </small>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </aside>
+
+
+
+    <!-- MAIN -->
+
+    <main class="main">
+
+
+        <div class="topbar">
+
+            <div>
+
+                <h1>
+                    Меню
+                </h1>
+
+                <p>
+                    Управление блюдами ресторана
+                </p>
+
+            </div>
+
+
+            <button
+                class="add-table-btn"
+                onclick="openAddModal()">
+
+                + Добавить блюдо
+
+            </button>
+
+        </div>
+
+
+
+        <!-- STATS -->
+
+        <div class="menu-summary">
+
+
+            <div class="menu-summary-card">
+
+                <span>
+                    Всего блюд
+                </span>
+
+                <strong>
+                    {{ menu|length }}
+                </strong>
+
+            </div>
+
+
+            <div class="menu-summary-card">
+
+                <span>
+                    Доступно
+                </span>
+
+                <strong>
+
+                    {{
+                        menu
+                        |selectattr("available")
+                        |list
+                        |length
+                    }}
+
+                </strong>
+
+            </div>
+
+
+            <div class="menu-summary-card">
+
+                <span>
+                    Категорий
+                </span>
+
+                <strong>
+                    {{ categories|length }}
+                </strong>
+
+            </div>
+
+
+        </div>
+
+
+
+        <!-- MENU LIST -->
+
+        <section class="admin-menu-panel">
+
+
+            <div class="menu-toolbar">
+
+                <input
+                    id="menuSearch"
+                    type="text"
+                    placeholder="Поиск блюда..."
+                    oninput="filterMenu()">
+
+
+                <select
+                    id="categoryFilter"
+                    onchange="filterMenu()">
+
+                    <option value="all">
+                        Все категории
+                    </option>
+
+                    {% for category in categories %}
+
+                    <option value="{{ category }}">
+                        {{ category }}
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+
+            <div class="admin-menu-list"
+                 id="menuList">
+
+
+                {% for item in menu %}
+
+                <article
+                    class="admin-menu-item"
+                    data-name="{{ item.name|lower }}"
+                    data-category="{{ item.category }}">
+
+
+                    <div class="admin-food-icon">
+                        {{ item.emoji }}
+                    </div>
+
+
+                    <div class="admin-food-info">
+
+                        <div class="admin-food-main">
+
+                            <h3>
+                                {{ item.name }}
+                            </h3>
+
+                            <span class="admin-category">
+                                {{ item.category }}
+                            </span>
+
+                        </div>
+
+
+                        <p>
+                            {{ item.description }}
+                        </p>
+
+
+                        <div class="admin-food-meta">
+
+                            <strong>
+                                {{
+                                    "{:,}".format(
+                                        item.price
+                                    ).replace(",", " ")
+                                }}
+                                сум
+                            </strong>
+
+
+                            {% if item.available %}
+
+                                <span class="availability available">
+                                    В продаже
+                                </span>
+
+                            {% else %}
+
+                                <span class="availability unavailable">
+                                    Нет в наличии
+                                </span>
+
+                            {% endif %}
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="admin-food-actions">
+
+                        <button
+                            onclick="openEditModal(
+                                {{ item.id }},
+                                '{{ item.name|replace("'", "\\'") }}',
+                                '{{ item.category|replace("'", "\\'") }}',
+                                '{{ (item.description or '')|replace("'", "\\'") }}',
+                                {{ item.price }},
+                                '{{ item.emoji }}',
+                                {{ item.available }}
+                            )">
+
+                            Изменить
+
+                        </button>
+
+
+                        <form
+                            method="POST"
+                            action="/menu/{{ item.id }}/delete"
+                            onsubmit="
+                                return confirm(
+                                    'Удалить это блюдо?'
+                                );
+                            ">
+
+                            <button type="submit"
+                                    class="delete-btn">
+
+                                Удалить
+
+                            </button>
+
+                        </form>
+
+                    </div>
+
+                </article>
+
+                {% endfor %}
+
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+
+<!-- ADD MODAL -->
+
+<div class="admin-modal"
+     id="addModal">
+
+
+    <div class="admin-modal-overlay"
+         onclick="closeAddModal()">
+    </div>
+
+
+    <div class="admin-modal-card">
+
+
+        <div class="admin-modal-header">
+
+            <div>
+
+                <h2>
+                    Новое блюдо
+                </h2>
+
+                <p>
+                    Добавьте блюдо в меню
+                </p>
+
+            </div>
+
+
+            <button onclick="closeAddModal()">
+                ×
+            </button>
+
+        </div>
+
+
+        <form
+            method="POST"
+            action="/menu/add"
+            class="menu-form">
+
+
+            <label>
+                Название
+            </label>
+
+            <input
+                name="name"
+                required
+                placeholder="Например: Филадельфия">
+
+
+            <label>
+                Категория
+            </label>
+
+            <input
+                name="category"
+                required
+                placeholder="Например: Суши">
+
+
+            <label>
+                Описание
+            </label>
+
+            <textarea
+                name="description"
+                placeholder="Краткое описание блюда"></textarea>
+
+
+            <label>
+                Цена
+            </label>
+
+            <input
+                name="price"
+                type="number"
+                min="1"
+                required
+                placeholder="50000">
+
+
+            <label>
+                Эмодзи
+            </label>
+
+            <input
+                name="emoji"
+                value="🍽️"
+                maxlength="4">
+
+
+            <button
+                type="submit"
+                class="save-menu-button">
+
+                Добавить блюдо
+
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+
+<!-- EDIT MODAL -->
+
+<div class="admin-modal"
+     id="editModal">
+
+
+    <div class="admin-modal-overlay"
+         onclick="closeEditModal()">
+    </div>
+
+
+    <div class="admin-modal-card">
+
+
+        <div class="admin-modal-header">
+
+            <div>
+
+                <h2>
+                    Изменить блюдо
+                </h2>
+
+                <p>
+                    Обновите данные блюда
+                </p>
+
+            </div>
+
+
+            <button onclick="closeEditModal()">
+                ×
+            </button>
+
+        </div>
+
+
+        <form
+            id="editForm"
+            method="POST"
+            class="menu-form">
+
+
+            <label>
+                Название
+            </label>
+
+            <input
+                id="editName"
+                name="name"
+                required>
+
+
+            <label>
+                Категория
+            </label>
+
+            <input
+                id="editCategory"
+                name="category"
+                required>
+
+
+            <label>
+                Описание
+            </label>
+
+            <textarea
+                id="editDescription"
+                name="description"></textarea>
+
+
+            <label>
+                Цена
+            </label>
+
+            <input
+                id="editPrice"
+                name="price"
+                type="number"
+                min="1"
+                required>
+
+
+            <label>
+                Эмодзи
+            </label>
+
+            <input
+                id="editEmoji"
+                name="emoji"
+                maxlength="4">
+
+
+            <label class="available-checkbox">
+
+                <input
+                    id="editAvailable"
+                    name="available"
+                    value="1"
+                    type="checkbox">
+
+                Блюдо доступно для заказа
+
+            </label>
+
+
+            <button
+                type="submit"
+                class="save-menu-button">
+
+                Сохранить изменения
+
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+
+<script>
+
+function openAddModal() {
+
+    document
+        .getElementById("addModal")
+        .classList.add("open");
+
+}
+
+
+function closeAddModal() {
+
+    document
+        .getElementById("addModal")
+        .classList.remove("open");
+
+}
+
+
+
+function openEditModal(
+    id,
+    name,
+    category,
+    description,
+    price,
+    emoji,
+    available
+) {
+
+    document.getElementById("editForm").action =
+        `/menu/${id}/update`;
+
+
+    document.getElementById("editName").value =
+        name;
+
+
+    document.getElementById("editCategory").value =
+        category;
+
+
+    document.getElementById("editDescription").value =
+        description;
+
+
+    document.getElementById("editPrice").value =
+        price;
+
+
+    document.getElementById("editEmoji").value =
+        emoji;
+
+
+    document.getElementById("editAvailable").checked =
+        available === 1;
+
+
+    document
+        .getElementById("editModal")
+        .classList.add("open");
+
+}
+
+
+function closeEditModal() {
+
+    document
+        .getElementById("editModal")
+        .classList.remove("open");
+
+}
+
+
+
+function filterMenu() {
+
+    const search =
+        document
+        .getElementById("menuSearch")
+        .value
+        .toLowerCase();
+
+
+    const category =
+        document
+        .getElementById("categoryFilter")
+        .value;
+
+
+    document
+        .querySelectorAll(".admin-menu-item")
+        .forEach(item => {
+
+
+            const name =
+                item.dataset.name;
+
+
+            const itemCategory =
+                item.dataset.category;
+
+
+            const matchesSearch =
+                name.includes(search);
+
+
+            const matchesCategory =
+                category === "all" ||
+                itemCategory === category;
+
+
+            item.style.display =
+                matchesSearch &&
+                matchesCategory
+                    ? "grid"
+                    : "none";
+
+        });
+
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        Кухня — Restaurant OS
+    </title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+
+<body>
+
+<div class="app">
+
+
+    <aside class="sidebar">
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                R
+            </div>
+
+            <div>
+
+                <h2>
+                    Restaurant
+                </h2>
+
+                <span>
+                    OS
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <nav class="menu">
+
+            <a href="/"
+               class="menu-item">
+
+                <span>▦</span>
+
+                Главная
+
+            </a>
+
+
+            <a href="/tables"
+               class="menu-item">
+
+                <span>🪑</span>
+
+                Столики
+
+            </a>
+
+
+            <a href="/kitchen"
+               class="menu-item active">
+
+                <span>👨‍🍳</span>
+
+                Кухня
+
+            </a>
+
+        </nav>
+
+    </aside>
+
+
+
+    <main class="main">
+
+
+        <div class="topbar">
+
+            <div>
+
+                <h1>
+                    Кухня
+                </h1>
+
+                <p>
+                    Заказы, которые необходимо приготовить
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="kitchen-grid">
+
+
+            {% for order in orders %}
+
+            <div class="kitchen-card">
+
+
+                <div class="kitchen-card-top">
+
+                    <div>
+
+                        <strong>
+                            #{{ order.public_id }}
+                        </strong>
+
+                        <span>
+                            Стол №{{ order.table_id }}
+                        </span>
+
+                    </div>
+
+
+                    <span
+                        class="kitchen-status {{ order.status }}">
+
+                        {{ order.status }}
+
+                    </span>
+
+                </div>
+
+
+                <div class="kitchen-order-info">
+
+                    <strong>
+                        {{ "{:,}".format(order.total).replace(",", " ") }}
+                        сум
+                    </strong>
+
+                    <span>
+                        {{ order.created_at }}
+                    </span>
+
+                </div>
+
+
+                <div class="kitchen-buttons">
+
+                    <button
+                        onclick="updateStatus(
+                            '{{ order.public_id }}',
+                            'cooking'
+                        )">
+
+                        Готовим
+
+                    </button>
+
+
+                    <button
+                        onclick="updateStatus(
+                            '{{ order.public_id }}',
+                            'ready'
+                        )">
+
+                        Готово
+
+                    </button>
+
+                </div>
+
+
+            </div>
+
+            {% else %}
+
+            <div class="empty-kitchen">
+
+                Пока нет заказов.
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+    </main>
+
+</div>
+
+
+
+<script>
+
+async function updateStatus(orderId, status) {
+
+    const response =
+        await fetch(
+            `/api/orders/${orderId}/status`,
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    status: status
+                })
+            }
+        );
+
+
+    const result =
+        await response.json();
+
+
+    if (result.success) {
+
+        location.reload();
+
+    }
+
+}
+
+</script>
+
+</body>
+
+</html>

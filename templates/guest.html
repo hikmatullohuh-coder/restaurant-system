@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        Меню — Стол №{{ table_id }}
+    </title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='guest.css') }}">
+
+</head>
+
+
+<body>
+
+
+<header class="guest-header">
+
+    <div>
+
+        <div class="restaurant-name">
+            Restaurant
+        </div>
+
+        <div class="restaurant-subtitle">
+            Japanese Kitchen
+        </div>
+
+    </div>
+
+
+    <div class="table-badge">
+
+        Стол №{{ table_id }}
+
+    </div>
+
+</header>
+
+
+
+<main class="guest-main">
+
+
+    <section class="guest-welcome">
+
+        <h1>
+            Добро пожаловать 🍜
+        </h1>
+
+        <p>
+            Выберите блюда, добавьте их в корзину
+            и оформите заказ прямо с телефона.
+        </p>
+
+    </section>
+
+
+
+    <div class="category-scroll">
+
+        <button class="category-button active"
+                onclick="filterCategory('Все')">
+            Все
+        </button>
+
+        {% for category in categories %}
+
+            <button class="category-button"
+                    onclick="filterCategory('{{ category }}')">
+
+                {{ category }}
+
+            </button>
+
+        {% endfor %}
+
+    </div>
+
+
+
+    <section class="guest-menu">
+
+        {% for item in menu %}
+
+        <article class="guest-food"
+                 data-category="{{ item.category }}">
+
+            <div class="guest-food-image">
+
+                {{ item.emoji }}
+
+            </div>
+
+
+            <div class="guest-food-info">
+
+                <div>
+
+                    <span class="food-category">
+                        {{ item.category }}
+                    </span>
+
+                    <h3>
+                        {{ item.name }}
+                    </h3>
+
+                    <p>
+                        {{ item.description }}
+                    </p>
+
+                </div>
+
+
+                <div class="food-bottom">
+
+                    <strong>
+                        {{ "{:,}".format(item.price).replace(",", " ") }}
+                        сум
+                    </strong>
+
+
+                    <button
+                        class="add-food-button"
+                        onclick="addToCart(
+                            {{ item.id }},
+                            '{{ item.name }}',
+                            {{ item.price }}
+                        )">
+
+                        +
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </article>
+
+        {% endfor %}
+
+    </section>
+
+</main>
+
+
+
+<div class="cart-bar"
+     id="cartBar">
+
+    <div>
+
+        <span>
+            Ваш заказ
+        </span>
+
+        <strong id="cartTotal">
+            0 сум
+        </strong>
+
+    </div>
+
+
+    <button onclick="openCart()">
+
+        Корзина
+
+        <span id="cartCount">
+            0
+        </span>
+
+    </button>
+
+</div>
+
+
+
+<div class="cart-modal"
+     id="cartModal">
+
+    <div class="cart-overlay"
+         onclick="closeCart()"></div>
+
+
+    <div class="cart-sheet">
+
+        <div class="cart-sheet-header">
+
+            <div>
+
+                <h2>
+                    Ваш заказ
+                </h2>
+
+                <span>
+                    Стол №{{ table_id }}
+                </span>
+
+            </div>
+
+
+            <button onclick="closeCart()">
+                ×
+            </button>
+
+        </div>
+
+
+        <div id="cartItems"
+             class="cart-items">
+
+        </div>
+
+
+        <div class="customer-field">
+
+            <label>
+                Ваше имя
+            </label>
+
+            <input
+                id="customerName"
+                type="text"
+                placeholder="Например, Хикматулло">
+
+        </div>
+
+
+        <div class="checkout-total">
+
+            <span>
+                Итого
+            </span>
+
+            <strong id="checkoutTotal">
+                0 сум
+            </strong>
+
+        </div>
+
+
+        <button class="checkout-button"
+                onclick="placeOrder()">
+
+            Оформить заказ
+
+        </button>
+
+    </div>
+
+</div>
+
+
+
+<script>
+
+const tableId = {{ table_id }};
+
+
+let cart = [];
+
+
+
+function addToCart(id, name, price) {
+
+    const existing =
+        cart.find(item => item.id === id);
+
+
+    if (existing) {
+
+        existing.quantity += 1;
+
+    } else {
+
+        cart.push({
+            id: id,
+            name: name,
+            price: price,
+            quantity: 1
+        });
+
+    }
+
+
+    updateCart();
+}
+
+
+
+function changeQuantity(id, amount) {
+
+    const item =
+        cart.find(item => item.id === id);
+
+
+    if (!item) {
+        return;
+    }
+
+
+    item.quantity += amount;
+
+
+    if (item.quantity <= 0) {
+
+        cart =
+            cart.filter(item => item.id !== id);
+
+    }
+
+
+    updateCart();
+}
+
+
+
+function updateCart() {
+
+    let total = 0;
+    let count = 0;
+
+
+    cart.forEach(item => {
+
+        total +=
+            item.price * item.quantity;
+
+        count += item.quantity;
+
+    });
+
+
+    document.getElementById("cartCount")
+        .textContent = count;
+
+
+    document.getElementById("cartTotal")
+        .textContent =
+        total.toLocaleString("ru-RU") + " сум";
+
+
+    document.getElementById("checkoutTotal")
+        .textContent =
+        total.toLocaleString("ru-RU") + " сум";
+
+
+    renderCart();
+
+
+    document.getElementById("cartBar")
+        .classList.toggle("visible", count > 0);
+}
+
+
+
+function renderCart() {
+
+    const container =
+        document.getElementById("cartItems");
+
+
+    if (cart.length === 0) {
+
+        container.innerHTML = `
+            <div class="empty-cart">
+                Ваша корзина пуста
+            </div>
+        `;
+
+        return;
+    }
+
+
+    container.innerHTML = "";
+
+
+    cart.forEach(item => {
+
+        container.innerHTML += `
+
+            <div class="cart-product">
+
+                <div>
+
+                    <strong>
+                        ${item.name}
+                    </strong>
+
+                    <span>
+                        ${item.price.toLocaleString("ru-RU")} сум
+                    </span>
+
+                </div>
+
+
+                <div class="guest-quantity">
+
+                    <button
+                        onclick="changeQuantity(${item.id}, -1)">
+                        −
+                    </button>
+
+
+                    <strong>
+                        ${item.quantity}
+                    </strong>
+
+
+                    <button
+                        onclick="changeQuantity(${item.id}, 1)">
+                        +
+                    </button>
+
+                </div>
+
+            </div>
+
+        `;
+
+    });
+
+}
+
+
+
+function openCart() {
+
+    document.getElementById("cartModal")
+        .classList.add("open");
+
+}
+
+
+function closeCart() {
+
+    document.getElementById("cartModal")
+        .classList.remove("open");
+
+}
+
+
+
+async function placeOrder() {
+
+    if (cart.length === 0) {
+
+        alert("Добавьте хотя бы одно блюдо.");
+
+        return;
+    }
+
+
+    const customerName =
+        document.getElementById("customerName")
+        .value
+        .trim();
+
+
+    const response =
+        await fetch("/api/orders", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+
+                table_id: tableId,
+
+                customer_name:
+                    customerName,
+
+                items: cart
+
+            })
+
+        });
+
+
+    const result =
+        await response.json();
+
+
+    if (!result.success) {
+
+        alert(
+            result.message ||
+            "Не удалось оформить заказ."
+        );
+
+        return;
+    }
+
+
+    window.location.href =
+        "/receipt/" + result.order_id;
+}
+
+
+
+function filterCategory(category) {
+
+    document
+        .querySelectorAll(".category-button")
+        .forEach(button => {
+
+            button.classList.remove("active");
+
+            if (button.textContent.trim() === category) {
+
+                button.classList.add("active");
+
+            }
+
+        });
+
+
+    document
+        .querySelectorAll(".guest-food")
+        .forEach(card => {
+
+            if (
+                category === "Все" ||
+                card.dataset.category === category
+            ) {
+
+                card.style.display = "";
+
+            } else {
+
+                card.style.display = "none";
+
+            }
+
+        });
+
+}
+
+</script>
+
+</body>
+
+</html>

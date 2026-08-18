@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        Чек — {{ order.public_id }}
+    </title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='guest.css') }}">
+
+</head>
+
+
+<body class="receipt-page">
+
+
+<div class="receipt-card">
+
+
+    {% if payment_page %}
+
+        <div class="receipt-icon">
+            💳
+        </div>
+
+        <h1>
+            Оплата заказа
+        </h1>
+
+        <p>
+            Заказ №{{ order.public_id }}
+        </p>
+
+
+        <div class="receipt-total">
+
+            {{ "{:,}".format(order.total).replace(",", " ") }}
+            сум
+
+        </div>
+
+
+        <button class="checkout-button"
+                onclick="demoPayment()">
+
+            Перейти к оплате
+
+        </button>
+
+
+    {% else %}
+
+
+        <div class="receipt-icon">
+            {% if order.payment_status == "paid" %}
+                ✓
+            {% else %}
+                🧾
+            {% endif %}
+        </div>
+
+
+        <h1>
+            Заказ оформлен
+        </h1>
+
+
+        <p>
+            Спасибо за заказ!
+        </p>
+
+
+        <div class="receipt-number">
+
+            Заказ №{{ order.public_id }}
+
+        </div>
+
+
+        <div class="receipt-info">
+
+            <div>
+
+                <span>
+                    Стол
+                </span>
+
+                <strong>
+                    №{{ order.table_id }}
+                </strong>
+
+            </div>
+
+
+            <div>
+
+                <span>
+                    Статус
+                </span>
+
+                <strong>
+                    {% if order.payment_status == "paid" %}
+                        Оплачен
+                    {% else %}
+                        Ожидает оплату
+                    {% endif %}
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <div class="receipt-items">
+
+            {% for item in items %}
+
+            <div class="receipt-item">
+
+                <div>
+
+                    <strong>
+                        {{ item.name }}
+                    </strong>
+
+                    <span>
+                        {{ item.quantity }} ×
+                        {{ "{:,}".format(item.price).replace(",", " ") }}
+                    </span>
+
+                </div>
+
+
+                <strong>
+
+                    {{
+                        "{:,}".format(
+                            item.price * item.quantity
+                        ).replace(",", " ")
+                    }}
+
+                    сум
+
+                </strong>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+
+        <div class="receipt-total-row">
+
+            <span>
+                Итого
+            </span>
+
+            <strong>
+
+                {{
+                    "{:,}".format(
+                        order.total
+                    ).replace(",", " ")
+                }}
+
+                сум
+
+            </strong>
+
+        </div>
+
+
+        {% if order.payment_status != "paid" %}
+
+            <a
+                href="/pay/{{ order.public_id }}"
+                class="checkout-button">
+
+                Оплатить онлайн
+
+            </a>
+
+        {% else %}
+
+            <div class="paid-message">
+
+                ✓ Оплата подтверждена
+
+            </div>
+
+        {% endif %}
+
+
+    {% endif %}
+
+</div>
+
+
+
+{% if payment_page %}
+
+<script>
+
+async function demoPayment() {
+
+    const response =
+        await fetch(
+            "/api/payment/demo",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify({
+                    order_id:
+                        "{{ order.public_id }}"
+                })
+            }
+        );
+
+
+    const result =
+        await response.json();
+
+
+    if (result.success) {
+
+        window.location.href =
+            "/receipt/{{ order.public_id }}";
+
+    }
+
+}
+
+</script>
+
+{% endif %}
+
+
+</body>
+
+</html>

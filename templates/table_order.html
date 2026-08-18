@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        Стол №{{ table_id }}
+    </title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+
+<body>
+
+<div class="app">
+
+
+    <aside class="sidebar">
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                R
+            </div>
+
+            <div>
+
+                <h2>Restaurant</h2>
+
+                <span>OS</span>
+
+            </div>
+
+        </div>
+
+
+        <nav class="menu">
+
+            <a href="/"
+               class="menu-item">
+
+                <span>▦</span>
+
+                Главная
+
+            </a>
+
+
+            <a href="/tables"
+               class="menu-item active">
+
+                <span>🪑</span>
+
+                Столики
+
+            </a>
+
+
+            <a href="/kitchen"
+               class="menu-item">
+
+                <span>👨‍🍳</span>
+
+                Кухня
+
+            </a>
+
+        </nav>
+
+    </aside>
+
+
+
+    <main class="main">
+
+        <div class="topbar">
+
+            <div>
+
+                <h1>
+                    Стол №{{ table_id }}
+                </h1>
+
+                <p>
+                    Создание заказа официантом
+                </p>
+
+            </div>
+
+
+            <a href="/tables"
+               class="back-btn">
+
+                ← Назад
+
+            </a>
+
+        </div>
+
+
+
+        <div class="order-page">
+
+
+            <section class="menu-panel">
+
+                <div class="panel-header">
+
+                    <div>
+
+                        <h2>
+                            Меню
+                        </h2>
+
+                        <p>
+                            Выберите блюда
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="food-grid">
+
+                    {% for item in menu %}
+
+                    <button
+                        class="food-card"
+                        onclick="addItem(
+                            {{ item.id }},
+                            '{{ item.name }}',
+                            {{ item.price }}
+                        )">
+
+
+                        <div class="food-image">
+
+                            {{ item.emoji }}
+
+                        </div>
+
+
+                        <strong>
+
+                            {{ item.name }}
+
+                        </strong>
+
+
+                        <span>
+
+                            {{
+                                "{:,}".format(
+                                    item.price
+                                ).replace(",", " ")
+                            }}
+
+                            сум
+
+                        </span>
+
+
+                    </button>
+
+                    {% endfor %}
+
+                </div>
+
+            </section>
+
+
+
+            <section class="current-order">
+
+                <div class="panel-header">
+
+                    <div>
+
+                        <h2>
+                            Заказ
+                        </h2>
+
+                        <p>
+                            Стол №{{ table_id }}
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div id="orderItems"
+                     class="order-items">
+
+                    <div class="empty-order">
+                        Заказ пока пуст
+                    </div>
+
+                </div>
+
+
+                <div class="order-total">
+
+                    <div>
+
+                        <span>
+                            Итого
+                        </span>
+
+                        <strong id="total">
+                            0 сум
+                        </strong>
+
+                    </div>
+
+
+                    <button
+                        class="pay-button"
+                        onclick="sendOrder()">
+
+                        Отправить на кухню
+
+                    </button>
+
+                </div>
+
+            </section>
+
+        </div>
+
+    </main>
+
+</div>
+
+
+
+<script>
+
+let order = [];
+
+
+function addItem(id, name, price) {
+
+    const existing =
+        order.find(
+            item => item.id === id
+        );
+
+
+    if (existing) {
+
+        existing.quantity++;
+
+    } else {
+
+        order.push({
+            id: id,
+            name: name,
+            price: price,
+            quantity: 1
+        });
+
+    }
+
+
+    renderOrder();
+
+}
+
+
+function changeQuantity(index, amount) {
+
+    order[index].quantity += amount;
+
+
+    if (order[index].quantity <= 0) {
+
+        order.splice(index, 1);
+
+    }
+
+
+    renderOrder();
+
+}
+
+
+function renderOrder() {
+
+    const container =
+        document.getElementById("orderItems");
+
+
+    const totalElement =
+        document.getElementById("total");
+
+
+    if (order.length === 0) {
+
+        container.innerHTML = `
+            <div class="empty-order">
+                Заказ пока пуст
+            </div>
+        `;
+
+
+        totalElement.textContent =
+            "0 сум";
+
+        return;
+
+    }
+
+
+    let total = 0;
+
+
+    container.innerHTML = "";
+
+
+    order.forEach((item, index) => {
+
+        total +=
+            item.price * item.quantity;
+
+
+        container.innerHTML += `
+
+            <div class="order-product">
+
+                <div>
+
+                    <strong>
+                        ${item.name}
+                    </strong>
+
+                    <span>
+                        ${item.price.toLocaleString("ru-RU")}
+                        сум
+                    </span>
+
+                </div>
+
+
+                <div class="quantity">
+
+                    <button
+                        onclick="changeQuantity(${index}, -1)">
+                        −
+                    </button>
+
+                    <strong>
+                        ${item.quantity}
+                    </strong>
+
+                    <button
+                        onclick="changeQuantity(${index}, 1)">
+                        +
+                    </button>
+
+                </div>
+
+            </div>
+
+        `;
+
+    });
+
+
+    totalElement.textContent =
+        total.toLocaleString("ru-RU")
+        + " сум";
+
+}
+
+
+async function sendOrder() {
+
+    if (!order.length) {
+
+        alert("Добавьте блюда.");
+
+        return;
+
+    }
+
+
+    const response =
+        await fetch("/api/orders", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type":
+                    "application/json"
+            },
+
+            body: JSON.stringify({
+
+                table_id:
+                    {{ table_id }},
+
+                customer_name:
+                    "",
+
+                items: order
+
+            })
+
+        });
+
+
+    const result =
+        await response.json();
+
+
+    if (!result.success) {
+
+        alert(
+            result.message ||
+            "Ошибка"
+        );
+
+        return;
+
+    }
+
+
+    alert(
+        "Заказ отправлен на кухню!"
+    );
+
+
+    window.location.href =
+        "/kitchen";
+
+}
+
+</script>
+
+</body>
+
+</html>

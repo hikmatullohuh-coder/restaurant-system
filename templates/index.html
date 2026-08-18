@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Restaurant OS</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- SIDEBAR -->
+
+    <aside class="sidebar">
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                R
+            </div>
+
+            <div>
+                <h2>Restaurant</h2>
+                <span>OS</span>
+            </div>
+
+        </div>
+
+
+        <nav class="menu">
+
+            <a href="/" class="menu-item active">
+                <span>▦</span>
+                Главная
+            </a>
+
+            <a href="/tables" class="menu-item">
+                <span>🪑</span>
+                Столики
+            </a>
+
+            <a href="#" class="menu-item">
+                <span>🧾</span>
+                Заказы
+            </a>
+
+            <a href="/menu" class="menu-item">
+    <span>🍽️</span>
+    Меню
+</a>
+
+            <a href="#" class="menu-item">
+                <span>📦</span>
+                Склад
+            </a>
+
+            <a href="#" class="menu-item">
+                <span>👥</span>
+                Сотрудники
+            </a>
+
+            <a href="#" class="menu-item">
+                <span>📊</span>
+                Аналитика
+            </a>
+
+        </nav>
+
+
+        <div class="sidebar-bottom">
+
+            <a href="#" class="menu-item">
+                <span>⚙️</span>
+                Настройки
+            </a>
+
+
+            <div class="user">
+
+                <div class="avatar">
+                    A
+                </div>
+
+                <div>
+                    <strong>Admin</strong>
+                    <small>Администратор</small>
+                </div>
+
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- MAIN -->
+
+    <main class="main">
+
+        <header class="topbar">
+
+            <div>
+
+                <h1>
+                    Добрый вечер 👋
+                </h1>
+
+                <p>
+                    Вот что происходит в ресторане сегодня.
+                </p>
+
+            </div>
+
+
+            <div class="date">
+
+                <span>
+                    Сегодня
+                </span>
+
+                <strong>
+                    18 августа 2026
+                </strong>
+
+            </div>
+
+        </header>
+
+
+        <!-- STATISTICS -->
+
+        <section class="stats">
+
+            <div class="stat-card">
+
+                <div class="stat-top">
+
+                    <span>
+                        Выручка сегодня
+                    </span>
+
+                    <div class="stat-icon green">
+                        ₽
+                    </div>
+
+                </div>
+
+
+                <h2>
+                    1 245 000 сум
+                </h2>
+
+                <p class="positive">
+                    ↑ 12.5%
+                    <span>
+                        по сравнению со вчера
+                    </span>
+                </p>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-top">
+
+                    <span>
+                        Заказы
+                    </span>
+
+                    <div class="stat-icon blue">
+                        🧾
+                    </div>
+
+                </div>
+
+
+                <h2>
+                    86
+                </h2>
+
+                <p class="positive">
+                    ↑ 8.2%
+                    <span>
+                        за сегодня
+                    </span>
+                </p>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-top">
+
+                    <span>
+                        Средний чек
+                    </span>
+
+                    <div class="stat-icon purple">
+                        💳
+                    </div>
+
+                </div>
+
+
+                <h2>
+                    144 767 сум
+                </h2>
+
+                <p class="positive">
+                    ↑ 4.7%
+                    <span>
+                        за сегодня
+                    </span>
+                </p>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-top">
+
+                    <span>
+                        Гости
+                    </span>
+
+                    <div class="stat-icon orange">
+                        👥
+                    </div>
+
+                </div>
+
+
+                <h2>
+                    214
+                </h2>
+
+                <p class="positive">
+                    ↑ 16.4%
+                    <span>
+                        за сегодня
+                    </span>
+                </p>
+
+            </div>
+
+        </section>
+
+
+        <!-- MAIN CONTENT -->
+
+        <section class="content-grid">
+
+
+            <!-- TABLES -->
+
+            <div class="panel">
+
+                <div class="panel-header">
+
+                    <div>
+
+                        <h2>
+                            Столики
+                        </h2>
+
+                        <p>
+                            Состояние зала
+                        </p>
+
+                    </div>
+
+
+                    <a href="/tables"
+                       class="view-all">
+                        Все столики →
+                    </a>
+
+                </div>
+
+
+                <div class="tables">
+
+                    <a href="/table/1"
+                       class="table free">
+
+                        <strong>
+                            01
+                        </strong>
+
+                        <span>
+                            Свободен
+                        </span>
+
+                    </a>
+
+
+                    <a href="/table/2"
+                       class="table busy">
+
+                        <strong>
+                            02
+                        </strong>
+
+                        <span>
+                            Занят
+                        </span>
+
+                    </a>
+
+
+                    <a href="/table/3"
+                       class="table busy">
+
+                        <strong>
+                            03
+                        </strong>
+
+                        <span>
+                            Занят
+                        </span>
+
+                    </a>
+
+
+                    <a href="/table/4"
+                       class="table free">
+
+                        <strong>
+                            04
+                        </strong>
+
+                        <span>
+                            Свободен
+                        </span>
+
+                    </a>
+
+
+                    <a href="/table/5"
+                       class="table waiting">
+
+                        <strong>
+                            05
+                        </strong>
+
+                        <span>
+                            Оплата
+                        </span>
+
+                    </a>
+
+
+                    <a href="/table/6"
+                       class="table free">
+
+                        <strong>
+                            06
+                        </strong>
+
+                        <span>
+                            Свободен
+                        </span>
+
+                    </a>
+
+                </div>
+
+            </div>
+
+
+            <!-- ORDERS -->
+
+            <div class="panel">
+
+                <div class="panel-header">
+
+                    <div>
+
+                        <h2>
+                            Последние заказы
+                        </h2>
+
+                        <p>
+                            Заказы в реальном времени
+                        </p>
+
+                    </div>
+
+                    <button class="view-all">
+                        Все →
+                    </button>
+
+                </div>
+
+
+                <div class="orders">
+
+
+                    <div class="order">
+
+                        <div class="order-info">
+
+                            <strong>
+                                #1048
+                            </strong>
+
+                            <span>
+                                Стол №3 · 3 блюда
+                            </span>
+
+                        </div>
+
+
+                        <div class="order-right">
+
+                            <strong>
+                                86 000 сум
+                            </strong>
+
+                            <span class="status cooking">
+                                Готовится
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="order">
+
+                        <div class="order-info">
+
+                            <strong>
+                                #1047
+                            </strong>
+
+                            <span>
+                                Стол №7 · 2 блюда
+                            </span>
+
+                        </div>
+
+
+                        <div class="order-right">
+
+                            <strong>
+                                52 000 сум
+                            </strong>
+
+                            <span class="status ready">
+                                Готово
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="order">
+
+                        <div class="order-info">
+
+                            <strong>
+                                #1046
+                            </strong>
+
+                            <span>
+                                Доставка · 4 блюда
+                            </span>
+
+                        </div>
+
+
+                        <div class="order-right">
+
+                            <strong>
+                                124 000 сум
+                            </strong>
+
+                            <span class="status delivery">
+                                Доставка
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="order">
+
+                        <div class="order-info">
+
+                            <strong>
+                                #1045
+                            </strong>
+
+                            <span>
+                                Стол №2 · 5 блюд
+                            </span>
+
+                        </div>
+
+
+                        <div class="order-right">
+
+                            <strong>
+                                176 000 сум
+                            </strong>
+
+                            <span class="status paid">
+                                Оплачено
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- QUICK ACTIONS -->
+
+        <section class="quick-actions">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <h2>
+                        Быстрые действия
+                    </h2>
+
+                    <p>
+                        Часто используемые функции
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="action-grid">
+
+                <a href="/table/1"
+                   class="action">
+
+                    <span>
+                        ➕
+                    </span>
+
+                    <strong>
+                        Новый заказ
+                    </strong>
+
+                    <small>
+                        Создать заказ
+                    </small>
+
+                </a>
+
+
+                <a href="/tables"
+                   class="action">
+
+                    <span>
+                        🪑
+                    </span>
+
+                    <strong>
+                        Открыть стол
+                    </strong>
+
+                    <small>
+                        Выбрать столик
+                    </small>
+
+                </a>
+
+
+                <button class="action">
+
+                    <span>
+                        🍔
+                    </span>
+
+                    <strong>
+                        Добавить блюдо
+                    </strong>
+
+                    <small>
+                        Изменить меню
+                    </small>
+
+                </button>
+
+
+                <button class="action">
+
+                    <span>
+                        📦
+                    </span>
+
+                    <strong>
+                        Проверить склад
+                    </strong>
+
+                    <small>
+                        Остатки продуктов
+                    </small>
+
+                </button>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+</body>
+</html>

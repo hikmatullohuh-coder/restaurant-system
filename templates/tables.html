@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        Столики — Restaurant OS
+    </title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<div class="app">
+
+
+    <!-- SIDEBAR -->
+
+    <aside class="sidebar">
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                R
+            </div>
+
+            <div>
+
+                <h2>
+                    Restaurant
+                </h2>
+
+                <span>
+                    OS
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <nav class="menu">
+
+            <a href="/"
+               class="menu-item">
+
+                <span>
+                    ▦
+                </span>
+
+                Главная
+
+            </a>
+
+
+            <a href="/tables"
+               class="menu-item active">
+
+                <span>
+                    🪑
+                </span>
+
+                Столики
+
+            </a>
+
+
+            <a href="#"
+               class="menu-item">
+
+                <span>
+                    🧾
+                </span>
+
+                Заказы
+
+            </a>
+
+
+            <a href="#"
+               class="menu-item">
+
+                <span>
+                    🍽️
+                </span>
+
+                Меню
+
+            </a>
+
+
+            <a href="#"
+               class="menu-item">
+
+                <span>
+                    📦
+                </span>
+
+                Склад
+
+            </a>
+
+
+            <a href="#"
+               class="menu-item">
+
+                <span>
+                    👥
+                </span>
+
+                Сотрудники
+
+            </a>
+
+
+            <a href="#"
+               class="menu-item">
+
+                <span>
+                    📊
+                </span>
+
+                Аналитика
+
+            </a>
+
+        </nav>
+
+
+        <div class="sidebar-bottom">
+
+            <a href="#"
+               class="menu-item">
+
+                <span>
+                    ⚙️
+                </span>
+
+                Настройки
+
+            </a>
+
+
+            <div class="user">
+
+                <div class="avatar">
+                    A
+                </div>
+
+                <div>
+
+                    <strong>
+                        Admin
+                    </strong>
+
+                    <small>
+                        Администратор
+                    </small>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- MAIN -->
+
+    <main class="main">
+
+
+        <div class="topbar">
+
+            <div>
+
+                <h1>
+                    Столики
+                </h1>
+
+                <p>
+                    Управление залом ресторана
+                </p>
+
+            </div>
+
+
+            <button class="add-table-btn">
+                + Добавить стол
+            </button>
+
+        </div>
+
+
+        <!-- SUMMARY -->
+
+        <div class="table-summary">
+
+
+            <div class="summary-item">
+
+                <div class="summary-number">
+                    8
+                </div>
+
+                <div>
+
+                    <strong>
+                        Всего
+                    </strong>
+
+                    <span>
+                        столиков
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="summary-item free-summary">
+
+                <div class="summary-number">
+                    4
+                </div>
+
+                <div>
+
+                    <strong>
+                        Свободно
+                    </strong>
+
+                    <span>
+                        можно посадить гостей
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="summary-item busy-summary">
+
+                <div class="summary-number">
+                    3
+                </div>
+
+                <div>
+
+                    <strong>
+                        Занято
+                    </strong>
+
+                    <span>
+                        есть активный заказ
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="summary-item waiting-summary">
+
+                <div class="summary-number">
+                    1
+                </div>
+
+                <div>
+
+                    <strong>
+                        Оплата
+                    </strong>
+
+                    <span>
+                        ожидается расчёт
+                    </span>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- FLOOR -->
+
+        <div class="floor-plan">
+
+
+            <div class="floor-header">
+
+                <div>
+
+                    <h2>
+                        Основной зал
+                    </h2>
+
+                    <p>
+                        Выберите столик для просмотра заказа
+                    </p>
+
+                </div>
+
+
+                <div class="legend">
+
+                    <span>
+
+                        <i class="legend-dot free-dot">
+                        </i>
+
+                        Свободен
+
+                    </span>
+
+
+                    <span>
+
+                        <i class="legend-dot busy-dot">
+                        </i>
+
+                        Занят
+
+                    </span>
+
+
+                    <span>
+
+                        <i class="legend-dot waiting-dot">
+                        </i>
+
+                        Оплата
+
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="restaurant-floor">
+
+
+                <a href="/table/1"
+                   class="restaurant-table free-table">
+
+                    <strong>
+                        01
+                    </strong>
+
+                    <span>
+                        2 места
+                    </span>
+
+                    <small>
+                        Свободен
+                    </small>
+
+                </a>
+
+
+                <a href="/table/2"
+                   class="restaurant-table busy-table">
+
+                    <strong>
+                        02
+                    </strong>
+
+                    <span>
+                        4 места
+                    </span>
+
+                    <small>
+                        Заказ #1047
+                    </small>
+
+                </a>
+
+
+                <a href="/table/3"
+                   class="restaurant-table busy-table">
+
+                    <strong>
+                        03
+                    </strong>
+
+                    <span>
+                        4 места
+                    </span>
+
+                    <small>
+                        Заказ #1048
+                    </small>
+
+                </a>
+
+
+                <a href="/table/4"
+                   class="restaurant-table free-table">
+
+                    <strong>
+                        04
+                    </strong>
+
+                    <span>
+                        2 места
+                    </span>
+
+                    <small>
+                        Свободен
+                    </small>
+
+                </a>
+
+
+                <a href="/table/5"
+                   class="restaurant-table waiting-table">
+
+                    <strong>
+                        05
+                    </strong>
+
+                    <span>
+                        6 мест
+                    </span>
+
+                    <small>
+                        Ожидает оплату
+                    </small>
+
+                </a>
+
+
+                <a href="/table/6"
+                   class="restaurant-table free-table">
+
+                    <strong>
+                        06
+                    </strong>
+
+                    <span>
+                        4 места
+                    </span>
+
+                    <small>
+                        Свободен
+                    </small>
+
+                </a>
+
+
+                <a href="/table/7"
+                   class="restaurant-table free-table">
+
+                    <strong>
+                        07
+                    </strong>
+
+                    <span>
+                        2 места
+                    </span>
+
+                    <small>
+                        Свободен
+                    </small>
+
+                </a>
+
+
+                <a href="/table/8"
+                   class="restaurant-table busy-table">
+
+                    <strong>
+                        08
+                    </strong>
+
+                    <span>
+                        6 мест
+                    </span>
+
+                    <small>
+                        Заказ #1045
+                    </small>
+
+                </a>
+
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>
