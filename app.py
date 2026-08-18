@@ -1,190 +1,168 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
-import sqlite3
 import os
 import uuid
 from datetime import datetime
 
 import qrcode
+from dotenv import load_dotenv
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    jsonify
+)
+from supabase import create_client
 
+
+# =========================================================
+# ENVIRONMENT
+# =========================================================
+
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
+
+if not SUPABASE_URL:
+    raise RuntimeError("SUPABASE_URL не найден в .env")
+
+if not SUPABASE_SECRET_KEY:
+    raise RuntimeError("SUPABASE_SECRET_KEY не найден в .env")
+
+
+# =========================================================
+# APP
+# =========================================================
 
 app = Flask(__name__)
 
-DATABASE = "restaurant.db"
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_SECRET_KEY
+)
 
 
 # =========================================================
-# DATABASE
+# HELPERS
 # =========================================================
 
-def get_db():
-    connection = sqlite3.connect(DATABASE)
-    connection.row_factory = sqlite3.Row
-    return connection
+def format_error(error):
+    return str(error)
 
 
-def init_db():
-    connection = get_db()
+def get_menu(include_unavailable=True):
+    """
+    Получает меню из Supabase.
+    """
 
-    # Меню
-    connection.execute("""
-        CREATE TABLE IF NOT EXISTS menu_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            category TEXT NOT NULL,
-            description TEXT,
-            price INTEGER NOT NULL,
-            emoji TEXT DEFAULT '🍽️',
-            available INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL
-        )
-    """)
+    query = (
+        supabase
+        .table("menu_items")
+        .select("*")
+        .order("category")
+        .order("name")
+    )
 
-    # Заказы
-    connection.execute("""
-        CREATE TABLE IF NOT EXISTS orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            public_id TEXT NOT NULL UNIQUE,
-            table_id INTEGER NOT NULL,
-            customer_name TEXT,
-            total INTEGER NOT NULL,
-            status TEXT NOT NULL,
-            payment_status TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-    """)
+    if not include_unavailable:
+        query = query.eq("available", True)
 
-    # Блюда в заказах
-    connection.execute("""
-        CREATE TABLE IF NOT EXISTS order_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            order_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            price INTEGER NOT NULL,
-            quantity INTEGER NOT NULL,
-            FOREIGN KEY(order_id) REFERENCES orders(id)
-        )
-    """)
+    result = query.execute()
 
-    # Если меню пустое — создаём стартовые блюда
-    menu_count = connection.execute("""
-        SELECT COUNT(*) AS count
-        FROM menu_items
-    """).fetchone()["count"]
-
-    if menu_count == 0:
-
-        default_menu = [
-            (
-                "Тонкоцу Рамен",
-                "Рамен",
-                "Насыщенный бульон, лапша, яйцо и мясо",
-                45000,
-                "🍜"
-            ),
-            (
-                "Суши-сет Sakura",
-                "Суши",
-                "Ассорти популярных суши",
-                85000,
-                "🍣"
-            ),
-            (
-                "Якитори",
-                "Горячее",
-                "Курица на гриле с соусом",
-                38000,
-                "🍢"
-            ),
-            (
-                "Удон",
-                "Лапша",
-                "Удон с овощами и специальным соусом",
-                42000,
-                "🍝"
-            ),
-            (
-                "Гёдза",
-                "Закуски",
-                "Японские жареные пельмени",
-                32000,
-                "🥟"
-            ),
-            (
-                "Матча Латте",
-                "Напитки",
-                "Нежный зелёный чай с молоком",
-                25000,
-                "🍵"
-            )
-        ]
-
-        for item in default_menu:
-
-            connection.execute("""
-                INSERT INTO menu_items (
-                    name,
-                    category,
-                    description,
-                    price,
-                    emoji,
-                    available,
-                    created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                item[0],
-                item[1],
-                item[2],
-                item[3],
-                item[4],
-                1,
-                datetime.now().isoformat(timespec="seconds")
-            ))
-
-    connection.commit()
-    connection.close()
-
-
-# =========================================================
-# MENU HELPERS
-# =========================================================
-
-def get_all_menu(include_unavailable=True):
-
-    connection = get_db()
-
-    if include_unavailable:
-        items = connection.execute("""
-            SELECT *
-            FROM menu_items
-            ORDER BY category, name
-        """).fetchall()
-    else:
-        items = connection.execute("""
-            SELECT *
-            FROM menu_items
-            WHERE available = 1
-            ORDER BY category, name
-        """).fetchall()
-
-    connection.close()
-
-    return items
+    return result.data or []
 
 
 def get_menu_item(item_id):
+    """
+    Получает одно блюдо.
+    """
 
-    connection = get_db()
+    result = (
+        supabase
+        .table("menu_items")
+        .select("*")
+        .eq("id", item_id)
+        .limit(1)
+        .execute()
+    )
 
-    item = connection.execute("""
-        SELECT *
-        FROM menu_items
-        WHERE id = ?
-    """, (item_id,)).fetchone()
+    if not result.data:
+        return None
 
-    connection.close()
+    return result.data[0]
 
-    return item
+
+def get_table_by_number(table_number):
+    """
+    Получает стол по его номеру.
+    """
+
+    result = (
+        supabase
+        .table("tables")
+        .select("*")
+        .eq("number", table_number)
+        .limit(1)
+        .execute()
+    )
+
+    if not result.data:
+        return None
+
+    return result.data[0]
+
+
+def get_order_by_public_id(public_id):
+    """
+    Получает заказ.
+    """
+
+    result = (
+        supabase
+        .table("orders")
+        .select("*")
+        .eq("public_id", public_id)
+        .limit(1)
+        .execute()
+    )
+
+    if not result.data:
+        return None
+
+    return result.data[0]
+
+
+def get_order_items(order_id):
+    """
+    Получает блюда заказа.
+    """
+
+    result = (
+        supabase
+        .table("order_items")
+        .select("*")
+        .eq("order_id", order_id)
+        .order("id")
+        .execute()
+    )
+
+    return result.data or []
+
+
+def update_table_status(table_id, status):
+    """
+    Меняет статус стола.
+    """
+
+    (
+        supabase
+        .table("tables")
+        .update({
+            "status": status
+        })
+        .eq("id", table_id)
+        .execute()
+    )
 
 
 # =========================================================
@@ -193,7 +171,68 @@ def get_menu_item(item_id):
 
 @app.route("/")
 def home():
-    return render_template("index.html")
+
+    try:
+        menu = get_menu(include_unavailable=False)
+
+        orders_result = (
+            supabase
+            .table("orders")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(20)
+            .execute()
+        )
+
+        orders = orders_result.data or []
+
+        tables_result = (
+            supabase
+            .table("tables")
+            .select("*")
+            .order("number")
+            .execute()
+        )
+
+        tables = tables_result.data or []
+
+        total_revenue = sum(
+            order["total"]
+            for order in orders
+            if order.get("payment_status") == "paid"
+        )
+
+        order_count = len(orders)
+
+        guests = sum(
+            1
+            for order in orders
+            if order.get("status") != "cancelled"
+        )
+
+        average_check = (
+            round(total_revenue / order_count)
+            if order_count
+            else 0
+        )
+
+        return render_template(
+            "index.html",
+            menu=menu,
+            orders=orders,
+            tables=tables,
+            total_revenue=total_revenue,
+            order_count=order_count,
+            guests=guests,
+            average_check=average_check
+        )
+
+    except Exception as error:
+
+        return f"""
+        <h1>Ошибка подключения к Supabase</h1>
+        <p>{format_error(error)}</p>
+        """, 500
 
 
 # =========================================================
@@ -202,46 +241,84 @@ def home():
 
 @app.route("/tables")
 def tables():
-    return render_template("tables.html")
+
+    try:
+
+        result = (
+            supabase
+            .table("tables")
+            .select("*")
+            .order("number")
+            .execute()
+        )
+
+        restaurant_tables = result.data or []
+
+        return render_template(
+            "tables.html",
+            tables=restaurant_tables
+        )
+
+    except Exception as error:
+
+        return f"""
+        <h1>Ошибка загрузки столиков</h1>
+        <p>{format_error(error)}</p>
+        """, 500
 
 
 # =========================================================
-# STAFF TABLE ORDER
+# TABLE ORDER FOR STAFF
 # =========================================================
 
-@app.route("/table/<int:table_id>")
-def table_order(table_id):
+@app.route("/table/<int:table_number>")
+def table_order(table_number):
 
-    menu = get_all_menu(include_unavailable=False)
+    table = get_table_by_number(table_number)
+
+    if not table:
+        return "Стол не найден", 404
+
+    menu = get_menu(include_unavailable=False)
 
     return render_template(
         "table_order.html",
-        table_id=table_id,
+        table_id=table_number,
+        table=table,
         menu=menu
     )
 
 
 # =========================================================
-# QR
+# QR CODE
 # =========================================================
 
-@app.route("/qr/<int:table_id>")
-def qr_table(table_id):
+@app.route("/qr/<int:table_number>")
+def qr_table(table_number):
+
+    table = get_table_by_number(table_number)
+
+    if not table:
+        return "Стол не найден", 404
 
     os.makedirs("static/qr", exist_ok=True)
 
     guest_url = url_for(
         "guest_order",
-        table_id=table_id,
+        table_id=table_number,
         _external=True
     )
 
-    file_path = f"static/qr/table_{table_id}.png"
+    file_path = (
+        f"static/qr/table_{table_number}.png"
+    )
 
     qr = qrcode.make(guest_url)
     qr.save(file_path)
 
-    return redirect(url_for("tables"))
+    return redirect(
+        url_for("tables")
+    )
 
 
 # =========================================================
@@ -251,20 +328,24 @@ def qr_table(table_id):
 @app.route("/guest/<int:table_id>")
 def guest_order(table_id):
 
-    menu = get_all_menu(include_unavailable=False)
+    table = get_table_by_number(table_id)
+
+    if not table:
+        return "Стол не найден", 404
+
+    menu = get_menu(include_unavailable=False)
 
     categories = sorted(
-        list(
-            set(
-                item["category"]
-                for item in menu
-            )
+        set(
+            item["category"]
+            for item in menu
         )
     )
 
     return render_template(
         "guest.html",
         table_id=table_id,
+        table=table,
         menu=menu,
         categories=categories
     )
@@ -277,22 +358,31 @@ def guest_order(table_id):
 @app.route("/menu")
 def menu_admin():
 
-    menu = get_all_menu()
+    try:
 
-    categories = sorted(
-        list(
+        menu = get_menu(
+            include_unavailable=True
+        )
+
+        categories = sorted(
             set(
                 item["category"]
                 for item in menu
             )
         )
-    )
 
-    return render_template(
-        "menu.html",
-        menu=menu,
-        categories=categories
-    )
+        return render_template(
+            "menu.html",
+            menu=menu,
+            categories=categories
+        )
+
+    except Exception as error:
+
+        return f"""
+        <h1>Ошибка загрузки меню</h1>
+        <p>{format_error(error)}</p>
+        """, 500
 
 
 # =========================================================
@@ -302,17 +392,38 @@ def menu_admin():
 @app.route("/menu/add", methods=["POST"])
 def add_menu_item():
 
-    name = request.form.get("name", "").strip()
-    category = request.form.get("category", "").strip()
-    description = request.form.get("description", "").strip()
-    price_raw = request.form.get("price", "").strip()
-    emoji = request.form.get("emoji", "🍽️").strip()
+    name = request.form.get(
+        "name",
+        ""
+    ).strip()
+
+    category = request.form.get(
+        "category",
+        ""
+    ).strip()
+
+    description = request.form.get(
+        "description",
+        ""
+    ).strip()
+
+    price_raw = request.form.get(
+        "price",
+        ""
+    ).strip()
+
+    emoji = request.form.get(
+        "emoji",
+        "🍽️"
+    ).strip()
+
 
     if not name or not category or not price_raw:
 
         return redirect(
             url_for("menu_admin")
         )
+
 
     try:
         price = int(price_raw)
@@ -323,36 +434,37 @@ def add_menu_item():
             url_for("menu_admin")
         )
 
+
     if price <= 0:
+
         return redirect(
             url_for("menu_admin")
         )
 
-    connection = get_db()
 
-    connection.execute("""
-        INSERT INTO menu_items (
-            name,
-            category,
-            description,
-            price,
-            emoji,
-            available,
-            created_at
+    try:
+
+        (
+            supabase
+            .table("menu_items")
+            .insert({
+                "name": name,
+                "category": category,
+                "description": description,
+                "price": price,
+                "emoji": emoji or "🍽️",
+                "available": True
+            })
+            .execute()
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        name,
-        category,
-        description,
-        price,
-        emoji or "🍽️",
-        1,
-        datetime.now().isoformat(timespec="seconds")
-    ))
 
-    connection.commit()
-    connection.close()
+    except Exception as error:
+
+        return f"""
+        <h1>Ошибка добавления блюда</h1>
+        <p>{format_error(error)}</p>
+        """, 500
+
 
     return redirect(
         url_for("menu_admin")
@@ -363,22 +475,49 @@ def add_menu_item():
 # UPDATE MENU ITEM
 # =========================================================
 
-@app.route("/menu/<int:item_id>/update", methods=["POST"])
+@app.route(
+    "/menu/<int:item_id>/update",
+    methods=["POST"]
+)
 def update_menu_item(item_id):
 
-    name = request.form.get("name", "").strip()
-    category = request.form.get("category", "").strip()
-    description = request.form.get("description", "").strip()
-    price_raw = request.form.get("price", "").strip()
-    emoji = request.form.get("emoji", "🍽️").strip()
+    name = request.form.get(
+        "name",
+        ""
+    ).strip()
 
-    available = 1 if request.form.get("available") == "1" else 0
+    category = request.form.get(
+        "category",
+        ""
+    ).strip()
+
+    description = request.form.get(
+        "description",
+        ""
+    ).strip()
+
+    price_raw = request.form.get(
+        "price",
+        ""
+    ).strip()
+
+    emoji = request.form.get(
+        "emoji",
+        "🍽️"
+    ).strip()
+
+    available = (
+        request.form.get("available")
+        == "1"
+    )
+
 
     if not name or not category or not price_raw:
 
         return redirect(
             url_for("menu_admin")
         )
+
 
     try:
         price = int(price_raw)
@@ -389,35 +528,39 @@ def update_menu_item(item_id):
             url_for("menu_admin")
         )
 
+
     if price <= 0:
+
         return redirect(
             url_for("menu_admin")
         )
 
-    connection = get_db()
 
-    connection.execute("""
-        UPDATE menu_items
-        SET
-            name = ?,
-            category = ?,
-            description = ?,
-            price = ?,
-            emoji = ?,
-            available = ?
-        WHERE id = ?
-    """, (
-        name,
-        category,
-        description,
-        price,
-        emoji or "🍽️",
-        available,
-        item_id
-    ))
+    try:
 
-    connection.commit()
-    connection.close()
+        (
+            supabase
+            .table("menu_items")
+            .update({
+                "name": name,
+                "category": category,
+                "description": description,
+                "price": price,
+                "emoji": emoji or "🍽️",
+                "available": available,
+                "updated_at": datetime.now().isoformat()
+            })
+            .eq("id", item_id)
+            .execute()
+        )
+
+    except Exception as error:
+
+        return f"""
+        <h1>Ошибка изменения блюда</h1>
+        <p>{format_error(error)}</p>
+        """, 500
+
 
     return redirect(
         url_for("menu_admin")
@@ -428,18 +571,29 @@ def update_menu_item(item_id):
 # DELETE MENU ITEM
 # =========================================================
 
-@app.route("/menu/<int:item_id>/delete", methods=["POST"])
+@app.route(
+    "/menu/<int:item_id>/delete",
+    methods=["POST"]
+)
 def delete_menu_item(item_id):
 
-    connection = get_db()
+    try:
 
-    connection.execute("""
-        DELETE FROM menu_items
-        WHERE id = ?
-    """, (item_id,))
+        (
+            supabase
+            .table("menu_items")
+            .delete()
+            .eq("id", item_id)
+            .execute()
+        )
 
-    connection.commit()
-    connection.close()
+    except Exception as error:
+
+        return f"""
+        <h1>Ошибка удаления блюда</h1>
+        <p>{format_error(error)}</p>
+        """, 500
+
 
     return redirect(
         url_for("menu_admin")
@@ -450,63 +604,139 @@ def delete_menu_item(item_id):
 # CREATE ORDER
 # =========================================================
 
-@app.route("/api/orders", methods=["POST"])
+@app.route(
+    "/api/orders",
+    methods=["POST"]
+)
 def create_order():
 
-    data = request.get_json(silent=True)
+    data = request.get_json(
+        silent=True
+    )
 
     if not data:
 
         return jsonify({
             "success": False,
-            "message": "Некорректные данные."
+            "message":
+                "Некорректные данные."
         }), 400
 
-    table_id = data.get("table_id")
-    customer_name = data.get("customer_name", "").strip()
-    items = data.get("items", [])
 
-    if not table_id:
+    table_number = data.get(
+        "table_id"
+    )
+
+    customer_name = data.get(
+        "customer_name",
+        ""
+    ).strip()
+
+    items = data.get(
+        "items",
+        []
+    )
+
+    source = data.get(
+        "source",
+        "staff"
+    )
+
+
+    if source not in {
+        "staff",
+        "qr"
+    }:
+
+        source = "staff"
+
+
+    if not table_number:
 
         return jsonify({
             "success": False,
-            "message": "Не указан столик."
+            "message":
+                "Не указан столик."
         }), 400
+
+
+    table = get_table_by_number(
+        table_number
+    )
+
+    if not table:
+
+        return jsonify({
+            "success": False,
+            "message":
+                "Столик не найден."
+        }), 404
+
 
     if not items:
 
         return jsonify({
             "success": False,
-            "message": "Корзина пуста."
+            "message":
+                "Корзина пуста."
         }), 400
 
+
     prepared_items = []
+
     total = 0
+
 
     for cart_item in items:
 
-        item_id = cart_item.get("id")
+        item_id = cart_item.get(
+            "id"
+        )
+
 
         try:
+
             quantity = int(
-                cart_item.get("quantity", 0)
+                cart_item.get(
+                    "quantity",
+                    0
+                )
             )
 
-        except (ValueError, TypeError):
+        except (
+            ValueError,
+            TypeError
+        ):
 
             return jsonify({
                 "success": False,
-                "message": "Некорректное количество."
+                "message":
+                    "Некорректное количество."
             }), 400
 
-        menu_item = get_menu_item(item_id)
+
+        if quantity <= 0 or quantity > 50:
+
+            return jsonify({
+                "success": False,
+                "message":
+                    "Некорректное количество."
+            }), 400
+
+
+        menu_item = get_menu_item(
+            item_id
+        )
+
 
         if not menu_item:
 
             return jsonify({
                 "success": False,
-                "message": "Блюдо не найдено."
+                "message":
+                    "Блюдо не найдено."
             }), 400
+
 
         if not menu_item["available"]:
 
@@ -517,80 +747,137 @@ def create_order():
                     f'сейчас недоступно.'
             }), 400
 
-        if quantity <= 0 or quantity > 50:
-
-            return jsonify({
-                "success": False,
-                "message": "Некорректное количество блюда."
-            }), 400
 
         item_total = (
-            menu_item["price"] * quantity
+            menu_item["price"]
+            * quantity
         )
 
         total += item_total
 
+
         prepared_items.append({
-            "name": menu_item["name"],
-            "price": menu_item["price"],
-            "quantity": quantity
+            "menu_item_id":
+                menu_item["id"],
+
+            "name":
+                menu_item["name"],
+
+            "price":
+                menu_item["price"],
+
+            "quantity":
+                quantity
         })
 
-    public_id = uuid.uuid4().hex[:10].upper()
 
-    created_at = datetime.now().isoformat(
-        timespec="seconds"
+    public_id = (
+        uuid.uuid4()
+        .hex[:10]
+        .upper()
     )
 
-    connection = get_db()
 
-    cursor = connection.execute("""
-        INSERT INTO orders (
-            public_id,
-            table_id,
-            customer_name,
-            total,
-            status,
-            payment_status,
-            created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        public_id,
-        table_id,
-        customer_name,
-        total,
-        "new",
-        "unpaid",
-        created_at
-    ))
+    # -----------------------------------------
+    # CREATE ORDER
+    # -----------------------------------------
 
-    order_id = cursor.lastrowid
+    order_result = (
+        supabase
+        .table("orders")
+        .insert({
+            "public_id":
+                public_id,
+
+            "table_id":
+                table["id"],
+
+            "customer_name":
+                customer_name,
+
+            "source":
+                source,
+
+            "total":
+                total,
+
+            "status":
+                "new",
+
+            "payment_status":
+                "unpaid"
+        })
+        .execute()
+    )
+
+
+    if not order_result.data:
+
+        return jsonify({
+            "success": False,
+            "message":
+                "Не удалось создать заказ."
+        }), 500
+
+
+    order = order_result.data[0]
+
+
+    # -----------------------------------------
+    # CREATE ORDER ITEMS
+    # -----------------------------------------
+
+    order_items = []
+
 
     for item in prepared_items:
 
-        connection.execute("""
-            INSERT INTO order_items (
-                order_id,
-                name,
-                price,
-                quantity
-            )
-            VALUES (?, ?, ?, ?)
-        """, (
-            order_id,
-            item["name"],
-            item["price"],
-            item["quantity"]
-        ))
+        order_items.append({
 
-    connection.commit()
-    connection.close()
+            "order_id":
+                order["id"],
+
+            "menu_item_id":
+                item["menu_item_id"],
+
+            "name":
+                item["name"],
+
+            "price":
+                item["price"],
+
+            "quantity":
+                item["quantity"]
+        })
+
+
+    (
+        supabase
+        .table("order_items")
+        .insert(order_items)
+        .execute()
+    )
+
+
+    # -----------------------------------------
+    # TABLE → BUSY
+    # -----------------------------------------
+
+    update_table_status(
+        table["id"],
+        "busy"
+    )
+
 
     return jsonify({
+
         "success": True,
-        "order_id": public_id,
-        "total": total
+
+        "order_id":
+            public_id,
+
+        "total":
+            total
     })
 
 
@@ -598,30 +885,23 @@ def create_order():
 # RECEIPT
 # =========================================================
 
-@app.route("/receipt/<public_id>")
+@app.route(
+    "/receipt/<public_id>"
+)
 def receipt(public_id):
 
-    connection = get_db()
-
-    order = connection.execute("""
-        SELECT *
-        FROM orders
-        WHERE public_id = ?
-    """, (public_id,)).fetchone()
+    order = get_order_by_public_id(
+        public_id
+    )
 
     if not order:
-
-        connection.close()
-
         return "Заказ не найден", 404
 
-    items = connection.execute("""
-        SELECT *
-        FROM order_items
-        WHERE order_id = ?
-    """, (order["id"],)).fetchall()
 
-    connection.close()
+    items = get_order_items(
+        order["id"]
+    )
+
 
     return render_template(
         "receipt.html",
@@ -631,25 +911,21 @@ def receipt(public_id):
 
 
 # =========================================================
-# PAYMENT
+# PAYMENT PAGE
 # =========================================================
 
-@app.route("/pay/<public_id>")
+@app.route(
+    "/pay/<public_id>"
+)
 def pay(public_id):
 
-    connection = get_db()
-
-    order = connection.execute("""
-        SELECT *
-        FROM orders
-        WHERE public_id = ?
-    """, (public_id,)).fetchone()
-
-    connection.close()
+    order = get_order_by_public_id(
+        public_id
+    )
 
     if not order:
-
         return "Заказ не найден", 404
+
 
     return render_template(
         "receipt.html",
@@ -663,10 +939,15 @@ def pay(public_id):
 # DEMO PAYMENT
 # =========================================================
 
-@app.route("/api/payment/demo", methods=["POST"])
+@app.route(
+    "/api/payment/demo",
+    methods=["POST"]
+)
 def demo_payment():
 
-    data = request.get_json(silent=True)
+    data = request.get_json(
+        silent=True
+    )
 
     if not data:
 
@@ -674,7 +955,11 @@ def demo_payment():
             "success": False
         }), 400
 
-    public_id = data.get("order_id")
+
+    public_id = data.get(
+        "order_id"
+    )
+
 
     if not public_id:
 
@@ -682,22 +967,72 @@ def demo_payment():
             "success": False
         }), 400
 
-    connection = get_db()
 
-    connection.execute("""
-        UPDATE orders
-        SET
-            payment_status = ?,
-            status = ?
-        WHERE public_id = ?
-    """, (
-        "paid",
-        "confirmed",
+    order = get_order_by_public_id(
         public_id
-    ))
+    )
 
-    connection.commit()
-    connection.close()
+
+    if not order:
+
+        return jsonify({
+            "success": False,
+            "message":
+                "Заказ не найден."
+        }), 404
+
+
+    # -----------------------------------------
+    # UPDATE ORDER
+    # -----------------------------------------
+
+    (
+        supabase
+        .table("orders")
+        .update({
+            "payment_status":
+                "paid",
+
+            "status":
+                "confirmed",
+
+            "updated_at":
+                datetime.now().isoformat()
+        })
+        .eq(
+            "id",
+            order["id"]
+        )
+        .execute()
+    )
+
+
+    # -----------------------------------------
+    # CREATE PAYMENT RECORD
+    # -----------------------------------------
+
+    (
+        supabase
+        .table("payments")
+        .insert({
+            "order_id":
+                order["id"],
+
+            "provider":
+                "demo",
+
+            "provider_payment_id":
+                uuid.uuid4().hex,
+
+            "amount":
+                order["total"],
+
+            "status":
+                "paid"
+        })
+        .execute()
+    )
+
 
     return jsonify({
         "success": True
@@ -711,24 +1046,44 @@ def demo_payment():
 @app.route("/kitchen")
 def kitchen():
 
-    connection = get_db()
+    try:
 
-    orders = connection.execute("""
-        SELECT *
-        FROM orders
-        ORDER BY id DESC
-    """).fetchall()
+        result = (
+            supabase
+            .table("orders")
+            .select("*")
+            .neq("status", "completed")
+            .neq("status", "cancelled")
+            .order("created_at", desc=True)
+            .execute()
+        )
 
-    connection.close()
+        orders = result.data or []
 
-    return render_template(
-        "kitchen.html",
-        orders=orders
-    )
+
+        for order in orders:
+
+            order["items"] = get_order_items(
+                order["id"]
+            )
+
+
+        return render_template(
+            "kitchen.html",
+            orders=orders
+        )
+
+
+    except Exception as error:
+
+        return f"""
+        <h1>Ошибка кухни</h1>
+        <p>{format_error(error)}</p>
+        """, 500
 
 
 # =========================================================
-# ORDER STATUS
+# UPDATE ORDER STATUS
 # =========================================================
 
 @app.route(
@@ -737,7 +1092,10 @@ def kitchen():
 )
 def update_order_status(public_id):
 
-    data = request.get_json(silent=True)
+    data = request.get_json(
+        silent=True
+    )
+
 
     if not data:
 
@@ -745,37 +1103,113 @@ def update_order_status(public_id):
             "success": False
         }), 400
 
-    status = data.get("status")
+
+    status = data.get(
+        "status"
+    )
+
 
     allowed_statuses = {
         "new",
+        "accepted",
         "cooking",
         "ready",
         "served",
         "cancelled",
+        "completed",
         "confirmed"
     }
+
 
     if status not in allowed_statuses:
 
         return jsonify({
+
             "success": False,
-            "message": "Недопустимый статус."
+
+            "message":
+                "Недопустимый статус."
+
         }), 400
 
-    connection = get_db()
 
-    connection.execute("""
-        UPDATE orders
-        SET status = ?
-        WHERE public_id = ?
-    """, (
-        status,
+    order = get_order_by_public_id(
         public_id
-    ))
+    )
 
-    connection.commit()
-    connection.close()
+
+    if not order:
+
+        return jsonify({
+
+            "success": False,
+
+            "message":
+                "Заказ не найден."
+
+        }), 404
+
+
+    (
+        supabase
+        .table("orders")
+        .update({
+            "status":
+                status,
+
+            "updated_at":
+                datetime.now().isoformat()
+        })
+        .eq(
+            "id",
+            order["id"]
+        )
+        .execute()
+    )
+
+
+    # -----------------------------------------
+    # TABLE STATUS
+    # -----------------------------------------
+
+    if status in {
+        "new",
+        "accepted",
+        "cooking",
+        "ready",
+        "confirmed"
+    }:
+
+        if order["table_id"]:
+
+            update_table_status(
+                order["table_id"],
+                "busy"
+            )
+
+
+    elif status in {
+        "served",
+        "completed"
+    }:
+
+        if order["table_id"]:
+
+            update_table_status(
+                order["table_id"],
+                "free"
+            )
+
+
+    elif status == "cancelled":
+
+        if order["table_id"]:
+
+            update_table_status(
+                order["table_id"],
+                "free"
+            )
+
 
     return jsonify({
         "success": True
@@ -787,8 +1221,6 @@ def update_order_status(public_id):
 # =========================================================
 
 if __name__ == "__main__":
-
-    init_db()
 
     app.run(
         debug=True,
