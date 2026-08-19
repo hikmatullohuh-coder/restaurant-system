@@ -26,9 +26,21 @@ from supabase import create_client
 
 load_dotenv()
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
-FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
+def get_env_value(primary_name, fallback_name):
+    """Read the configured value and ignore unresolved process.env placeholders."""
+    primary_value = os.getenv(primary_name)
+    fallback_value = os.getenv(fallback_name)
+
+    if primary_value and not primary_value.startswith("process.env."):
+        return primary_value
+    if fallback_value and not fallback_value.startswith("process.env."):
+        return fallback_value
+    return primary_value or fallback_value
+
+
+SUPABASE_URL = get_env_value("SUPABASE_URL_2", "SUPABASE_URL")
+SUPABASE_SECRET_KEY = get_env_value("SUPABASE_SECRET_KEY_2", "SUPABASE_SECRET_KEY")
+FLASK_SECRET_KEY = get_env_value("FLASK_SECRET_KEY_2", "FLASK_SECRET_KEY")
 
 
 if not SUPABASE_URL:
@@ -1587,7 +1599,7 @@ def health():
 if __name__ == "__main__":
 
     app.run(
-        debug=True,
-        host="127.0.0.1",
-        port=5000
+        debug=os.getenv("FLASK_DEBUG", "0") == "1",
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("PORT", "5000"))
     )
