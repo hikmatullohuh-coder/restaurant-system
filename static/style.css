@@ -1757,3 +1757,188 @@ button {
         flex-wrap: wrap;
     }
 }
+/* =========================================================
+   LOGIN
+========================================================= */
+
+.login-page {
+    min-height: 100vh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 20px;
+
+    background:
+        radial-gradient(
+            circle at top left,
+            #ece8ff,
+            transparent 35%
+        ),
+        #f5f6fa;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 410px;
+
+    background: white;
+
+    border: 1px solid #e5e7ed;
+
+    border-radius: 22px;
+
+    padding: 30px;
+
+    box-shadow:
+        0 25px 70px rgba(21, 24, 31, .08);
+}
+
+.login-logo {
+    width: 58px;
+    height: 58px;
+
+    margin-bottom: 18px;
+
+    border-radius: 17px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background:
+        linear-gradient(
+            135deg,
+            #7659ff,
+            #6243e8
+        );
+
+    color: white;
+
+    font-size: 25px;
+    font-weight: 800;
+}
+
+.login-title {
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.login-subtitle {
+    margin-top: 7px;
+
+    color: #9297a2;
+
+    font-size: 12px;
+}
+
+.login-error {
+    margin-top: 18px;
+
+    background: #fff0f2;
+
+    border: 1px solid #f1d2d6;
+
+    color: #bc515b;
+
+    padding: 11px 12px;
+
+    border-radius: 10px;
+
+    font-size: 11px;
+}
+
+.login-form {
+    margin-top: 22px;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 8px;
+}
+
+.login-form label {
+    color: #666b75;
+
+    font-size: 10px;
+}
+
+.login-form input {
+    width: 100%;
+
+    height: 44px;
+
+    border: 1px solid #dfe1e7;
+
+    border-radius: 11px;
+
+    padding: 0 12px;
+
+    outline: none;
+
+    font-size: 12px;
+}
+
+.login-form input:focus {
+    border-color: #b9afea;
+
+    box-shadow:
+        0 0 0 3px rgba(115,87,255,.08);
+}
+
+.login-button {
+    width: 100%;
+
+    margin-top: 9px;
+
+    min-height: 44px;
+
+    border: none;
+
+    border-radius: 11px;
+
+    background:
+        linear-gradient(
+            135deg,
+            #7659ff,
+            #6243e8
+        );
+
+    color: white;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 12px;
+    font-weight: 700;
+
+    text-decoration: none;
+}
+
+.login-note {
+    margin-top: 17px;
+
+    color: #a0a4ad;
+
+    text-align: center;
+
+    font-size: 9px;
+}
+
+.login-link {
+    margin-top: 20px;
+}
+
+.logout-link {
+    display: block;
+
+    margin-top: 14px;
+
+    text-align: center;
+
+    color: #8b909a;
+
+    font-size: 10px;
+}

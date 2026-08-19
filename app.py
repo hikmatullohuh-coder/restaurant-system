@@ -1,17 +1,22 @@
 import os
 import uuid
+from functools import wraps
 from datetime import datetime
 
 import qrcode
+
 from dotenv import load_dotenv
+
 from flask import (
     Flask,
     render_template,
     request,
     redirect,
     url_for,
-    jsonify
+    jsonify,
+    session
 )
+
 from supabase import create_client
 
 
@@ -23,19 +28,43 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
+FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
+
 
 if not SUPABASE_URL:
-    raise RuntimeError("SUPABASE_URL не найден в .env")
+    raise RuntimeError(
+        "SUPABASE_URL не найден в .env"
+    )
 
 if not SUPABASE_SECRET_KEY:
-    raise RuntimeError("SUPABASE_SECRET_KEY не найден в .env")
+    raise RuntimeError(
+        "SUPABASE_SECRET_KEY не найден в .env"
+    )
+
+if not FLASK_SECRET_KEY:
+    raise RuntimeError(
+        "FLASK_SECRET_KEY не найден в .env"
+    )
 
 
 # =========================================================
-# APP
+# FLASK
 # =========================================================
 
 app = Flask(__name__)
+
+app.secret_key = FLASK_SECRET_KEY
+
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+# Для HTTPS на Vercel позже можно включить:
+# app.config["SESSION_COOKIE_SECURE"] = True
+
+
+# =========================================================
+# SUPABASE
+# =========================================================
 
 supabase = create_client(
     SUPABASE_URL,
@@ -44,124 +73,210 @@ supabase = create_client(
 
 
 # =========================================================
-# HELPERS
+# AUTH HELPERS
 # =========================================================
 
-def format_error(error):
-    return str(error)
+def get_current_user():
+    user_id = session.get("user_id")
 
-
-def get_menu(include_unavailable=True):
-    """
-    Получает меню из Supabase.
-    """
-
-    query = (
-        supabase
-        .table("menu_items")
-        .select("*")
-        .order("category")
-        .order("name")
-    )
-
-    if not include_unavailable:
-        query = query.eq("available", True)
-
-    result = query.execute()
-
-    return result.data or []
-
-
-def get_menu_item(item_id):
-    """
-    Получает одно блюдо.
-    """
-
-    result = (
-        supabase
-        .table("menu_items")
-        .select("*")
-        .eq("id", item_id)
-        .limit(1)
-        .execute()
-    )
-
-    if not result.data:
+    if not user_id:
         return None
 
-    return result.data[0]
+    try:
+        result = (
+            supabase
+            .table("profiles")
+            .select("*")
+            .eq("id", user_id)
+            .eq("active", True)
+            .limit(1)
+            .execute()
+        )
 
+        if not result.data:
+            return None
 
-def get_table_by_number(table_number):
-    """
-    Получает стол по его номеру.
-    """
+        profile = result.data[0]
 
-    result = (
-        supabase
-        .table("tables")
-        .select("*")
-        .eq("number", table_number)
-        .limit(1)
-        .execute()
-    )
+        return {
+            "id": user_id,
+            "full_name": profile.get(
+                "full_name",
+                ""
+            ),
+            "role": profile.get(
+                "role"
+            ),
+            "active": profile.get(
+                "active",
+                True
+            )
+        }
 
-    if not result.data:
+    except Exception:
         return None
 
-    return result.data[0]
+
+def login_required(view):
+    @wraps(view)
+    def wrapped_view(*args, **kwargs):
+
+        user = get_current_user()
+
+        if not user:
+            return redirect(
+                url_for("login")
+            )
+
+        return view(
+            user=user,
+            *args,
+            **kwargs
+        )
+
+    return wrapped_view
 
 
-def get_order_by_public_id(public_id):
-    """
-    Получает заказ.
-    """
+def role_required(*allowed_roles):
 
-    result = (
-        supabase
-        .table("orders")
-        .select("*")
-        .eq("public_id", public_id)
-        .limit(1)
-        .execute()
+    def decorator(view):
+
+        @wraps(view)
+        def wrapped_view(*args, **kwargs):
+
+            user = get_current_user()
+
+            if not user:
+                return redirect(
+                    url_for("login")
+                )
+
+            if user["role"] not in allowed_roles:
+                return render_template(
+                    "403.html",
+                    user=user
+                ), 403
+
+            return view(
+                user=user,
+                *args,
+                **kwargs
+            )
+
+        return wrapped_view
+
+    return decorator
+
+
+# =========================================================
+# LOGIN
+# =========================================================
+
+@app.route(
+    "/login",
+    methods=["GET", "POST"]
+)
+def login():
+
+    if request.method == "GET":
+
+        if get_current_user():
+            return redirect(
+                url_for("home")
+            )
+
+        return render_template(
+            "login.html"
+        )
+
+    email = request.form.get(
+        "email",
+        ""
+    ).strip()
+
+    password = request.form.get(
+        "password",
+        ""
     )
 
-    if not result.data:
-        return None
+    if not email or not password:
 
-    return result.data[0]
+        return render_template(
+            "login.html",
+            error="Введите email и пароль."
+        )
+
+    try:
+
+        response = (
+            supabase
+            .auth
+            .sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+        )
+
+        if not response.user:
+
+            return render_template(
+                "login.html",
+                error="Не удалось выполнить вход."
+            )
+
+        session.clear()
+
+        session["user_id"] = response.user.id
+
+        if response.session:
+
+            session["access_token"] = (
+                response.session.access_token
+            )
+
+        user = get_current_user()
+
+        if not user:
+
+            session.clear()
+
+            return render_template(
+                "login.html",
+                error=(
+                    "Пользователь вошёл, "
+                    "но профиль или роль "
+                    "ещё не настроены."
+                )
+            )
+
+        return redirect(
+            url_for("home")
+        )
+
+    except Exception as error:
+
+        print(
+            "LOGIN ERROR:",
+            error
+        )
+
+        return render_template(
+            "login.html",
+            error=f"Ошибка входа: {error}"
+        )
 
 
-def get_order_items(order_id):
-    """
-    Получает блюда заказа.
-    """
+# =========================================================
+# LOGOUT
+# =========================================================
 
-    result = (
-        supabase
-        .table("order_items")
-        .select("*")
-        .eq("order_id", order_id)
-        .order("id")
-        .execute()
-    )
+@app.route("/logout")
+def logout():
 
-    return result.data or []
+    session.clear()
 
-
-def update_table_status(table_id, status):
-    """
-    Меняет статус стола.
-    """
-
-    (
-        supabase
-        .table("tables")
-        .update({
-            "status": status
-        })
-        .eq("id", table_id)
-        .execute()
+    return redirect(
+        url_for("login")
     )
 
 
@@ -170,21 +285,34 @@ def update_table_status(table_id, status):
 # =========================================================
 
 @app.route("/")
-def home():
+@role_required(
+    "admin",
+    "manager",
+    "waiter",
+    "cook",
+    "cashier"
+)
+def home(user):
 
     try:
-        menu = get_menu(include_unavailable=False)
 
         orders_result = (
             supabase
             .table("orders")
             .select("*")
-            .order("created_at", desc=True)
-            .limit(20)
+            .order(
+                "created_at",
+                desc=True
+            )
+            .limit(50)
             .execute()
         )
 
-        orders = orders_result.data or []
+        orders = (
+            orders_result.data
+            or []
+        )
+
 
         tables_result = (
             supabase
@@ -194,31 +322,47 @@ def home():
             .execute()
         )
 
-        tables = tables_result.data or []
-
-        total_revenue = sum(
-            order["total"]
-            for order in orders
-            if order.get("payment_status") == "paid"
+        tables = (
+            tables_result.data
+            or []
         )
 
-        order_count = len(orders)
+
+        total_revenue = sum(
+            order.get("total", 0)
+            for order in orders
+            if order.get(
+                "payment_status"
+            ) == "paid"
+        )
+
+
+        order_count = len(
+            orders
+        )
+
 
         guests = sum(
             1
             for order in orders
-            if order.get("status") != "cancelled"
+            if order.get("status")
+            != "cancelled"
         )
 
+
         average_check = (
-            round(total_revenue / order_count)
+            round(
+                total_revenue
+                / order_count
+            )
             if order_count
             else 0
         )
 
+
         return render_template(
             "index.html",
-            menu=menu,
+            user=user,
             orders=orders,
             tables=tables,
             total_revenue=total_revenue,
@@ -227,12 +371,14 @@ def home():
             average_check=average_check
         )
 
+
     except Exception as error:
 
-        return f"""
-        <h1>Ошибка подключения к Supabase</h1>
-        <p>{format_error(error)}</p>
-        """, 500
+        return render_template(
+            "403.html",
+            user=user,
+            error=str(error)
+        ), 500
 
 
 # =========================================================
@@ -240,114 +386,89 @@ def home():
 # =========================================================
 
 @app.route("/tables")
-def tables():
+@role_required(
+    "admin",
+    "manager",
+    "waiter"
+)
+def tables(user):
 
-    try:
+    result = (
+        supabase
+        .table("tables")
+        .select("*")
+        .order("number")
+        .execute()
+    )
 
-        result = (
-            supabase
-            .table("tables")
-            .select("*")
-            .order("number")
-            .execute()
-        )
+    restaurant_tables = (
+        result.data
+        or []
+    )
 
-        restaurant_tables = result.data or []
 
-        return render_template(
-            "tables.html",
-            tables=restaurant_tables
-        )
-
-    except Exception as error:
-
-        return f"""
-        <h1>Ошибка загрузки столиков</h1>
-        <p>{format_error(error)}</p>
-        """, 500
+    return render_template(
+        "tables.html",
+        user=user,
+        tables=restaurant_tables
+    )
 
 
 # =========================================================
-# TABLE ORDER FOR STAFF
+# STAFF TABLE ORDER
 # =========================================================
 
-@app.route("/table/<int:table_number>")
-def table_order(table_number):
+@app.route(
+    "/table/<int:table_number>"
+)
+@role_required(
+    "admin",
+    "manager",
+    "waiter"
+)
+def table_order(
+    table_number,
+    user
+):
 
-    table = get_table_by_number(table_number)
+    table_result = (
+        supabase
+        .table("tables")
+        .select("*")
+        .eq(
+            "number",
+            table_number
+        )
+        .limit(1)
+        .execute()
+    )
 
-    if not table:
+
+    if not table_result.data:
+
         return "Стол не найден", 404
 
-    menu = get_menu(include_unavailable=False)
+
+    menu_result = (
+        supabase
+        .table("menu_items")
+        .select("*")
+        .eq(
+            "available",
+            True
+        )
+        .order("category")
+        .order("name")
+        .execute()
+    )
+
 
     return render_template(
         "table_order.html",
+        user=user,
+        table=table_result.data[0],
         table_id=table_number,
-        table=table,
-        menu=menu
-    )
-
-
-# =========================================================
-# QR CODE
-# =========================================================
-
-@app.route("/qr/<int:table_number>")
-def qr_table(table_number):
-
-    table = get_table_by_number(table_number)
-
-    if not table:
-        return "Стол не найден", 404
-
-    os.makedirs("static/qr", exist_ok=True)
-
-    guest_url = url_for(
-        "guest_order",
-        table_id=table_number,
-        _external=True
-    )
-
-    file_path = (
-        f"static/qr/table_{table_number}.png"
-    )
-
-    qr = qrcode.make(guest_url)
-    qr.save(file_path)
-
-    return redirect(
-        url_for("tables")
-    )
-
-
-# =========================================================
-# GUEST QR MENU
-# =========================================================
-
-@app.route("/guest/<int:table_id>")
-def guest_order(table_id):
-
-    table = get_table_by_number(table_id)
-
-    if not table:
-        return "Стол не найден", 404
-
-    menu = get_menu(include_unavailable=False)
-
-    categories = sorted(
-        set(
-            item["category"]
-            for item in menu
-        )
-    )
-
-    return render_template(
-        "guest.html",
-        table_id=table_id,
-        table=table,
-        menu=menu,
-        categories=categories
+        menu=menu_result.data or []
     )
 
 
@@ -356,41 +477,57 @@ def guest_order(table_id):
 # =========================================================
 
 @app.route("/menu")
-def menu_admin():
+@role_required(
+    "admin",
+    "manager"
+)
+def menu_admin(user):
 
-    try:
+    result = (
+        supabase
+        .table("menu_items")
+        .select("*")
+        .order("category")
+        .order("name")
+        .execute()
+    )
 
-        menu = get_menu(
-            include_unavailable=True
+
+    menu = (
+        result.data
+        or []
+    )
+
+
+    categories = sorted(
+        set(
+            item["category"]
+            for item in menu
         )
+    )
 
-        categories = sorted(
-            set(
-                item["category"]
-                for item in menu
-            )
-        )
 
-        return render_template(
-            "menu.html",
-            menu=menu,
-            categories=categories
-        )
-
-    except Exception as error:
-
-        return f"""
-        <h1>Ошибка загрузки меню</h1>
-        <p>{format_error(error)}</p>
-        """, 500
+    return render_template(
+        "menu.html",
+        user=user,
+        menu=menu,
+        categories=categories
+    )
 
 
 # =========================================================
 # ADD MENU ITEM
 # =========================================================
 
-@app.route("/menu/add", methods=["POST"])
-def add_menu_item():
+@app.route(
+    "/menu/add",
+    methods=["POST"]
+)
+@role_required(
+    "admin",
+    "manager"
+)
+def add_menu_item(user):
 
     name = request.form.get(
         "name",
@@ -418,15 +555,11 @@ def add_menu_item():
     ).strip()
 
 
-    if not name or not category or not price_raw:
-
-        return redirect(
-            url_for("menu_admin")
-        )
-
-
     try:
-        price = int(price_raw)
+
+        price = int(
+            price_raw
+        )
 
     except ValueError:
 
@@ -435,35 +568,30 @@ def add_menu_item():
         )
 
 
-    if price <= 0:
+    if (
+        not name
+        or not category
+        or price <= 0
+    ):
 
         return redirect(
             url_for("menu_admin")
         )
 
 
-    try:
-
-        (
-            supabase
-            .table("menu_items")
-            .insert({
-                "name": name,
-                "category": category,
-                "description": description,
-                "price": price,
-                "emoji": emoji or "🍽️",
-                "available": True
-            })
-            .execute()
-        )
-
-    except Exception as error:
-
-        return f"""
-        <h1>Ошибка добавления блюда</h1>
-        <p>{format_error(error)}</p>
-        """, 500
+    (
+        supabase
+        .table("menu_items")
+        .insert({
+            "name": name,
+            "category": category,
+            "description": description,
+            "price": price,
+            "emoji": emoji or "🍽️",
+            "available": True
+        })
+        .execute()
+    )
 
 
     return redirect(
@@ -472,14 +600,21 @@ def add_menu_item():
 
 
 # =========================================================
-# UPDATE MENU ITEM
+# UPDATE MENU
 # =========================================================
 
 @app.route(
     "/menu/<int:item_id>/update",
     methods=["POST"]
 )
-def update_menu_item(item_id):
+@role_required(
+    "admin",
+    "manager"
+)
+def update_menu_item(
+    item_id,
+    user
+):
 
     name = request.form.get(
         "name",
@@ -507,20 +642,17 @@ def update_menu_item(item_id):
     ).strip()
 
     available = (
-        request.form.get("available")
-        == "1"
+        request.form.get(
+            "available"
+        ) == "1"
     )
 
 
-    if not name or not category or not price_raw:
-
-        return redirect(
-            url_for("menu_admin")
-        )
-
-
     try:
-        price = int(price_raw)
+
+        price = int(
+            price_raw
+        )
 
     except ValueError:
 
@@ -529,37 +661,36 @@ def update_menu_item(item_id):
         )
 
 
-    if price <= 0:
+    if (
+        not name
+        or not category
+        or price <= 0
+    ):
 
         return redirect(
             url_for("menu_admin")
         )
 
 
-    try:
-
-        (
-            supabase
-            .table("menu_items")
-            .update({
-                "name": name,
-                "category": category,
-                "description": description,
-                "price": price,
-                "emoji": emoji or "🍽️",
-                "available": available,
-                "updated_at": datetime.now().isoformat()
-            })
-            .eq("id", item_id)
-            .execute()
+    (
+        supabase
+        .table("menu_items")
+        .update({
+            "name": name,
+            "category": category,
+            "description": description,
+            "price": price,
+            "emoji": emoji or "🍽️",
+            "available": available,
+            "updated_at":
+                datetime.now().isoformat()
+        })
+        .eq(
+            "id",
+            item_id
         )
-
-    except Exception as error:
-
-        return f"""
-        <h1>Ошибка изменения блюда</h1>
-        <p>{format_error(error)}</p>
-        """, 500
+        .execute()
+    )
 
 
     return redirect(
@@ -568,35 +699,164 @@ def update_menu_item(item_id):
 
 
 # =========================================================
-# DELETE MENU ITEM
+# DELETE MENU
 # =========================================================
 
 @app.route(
     "/menu/<int:item_id>/delete",
     methods=["POST"]
 )
-def delete_menu_item(item_id):
+@role_required(
+    "admin"
+)
+def delete_menu_item(
+    item_id,
+    user
+):
 
-    try:
-
-        (
-            supabase
-            .table("menu_items")
-            .delete()
-            .eq("id", item_id)
-            .execute()
+    (
+        supabase
+        .table("menu_items")
+        .delete()
+        .eq(
+            "id",
+            item_id
         )
-
-    except Exception as error:
-
-        return f"""
-        <h1>Ошибка удаления блюда</h1>
-        <p>{format_error(error)}</p>
-        """, 500
+        .execute()
+    )
 
 
     return redirect(
         url_for("menu_admin")
+    )
+
+
+# =========================================================
+# QR GUEST PAGE
+# =========================================================
+
+@app.route(
+    "/guest/<int:table_id>"
+)
+def guest_order(table_id):
+
+    table_result = (
+        supabase
+        .table("tables")
+        .select("*")
+        .eq(
+            "number",
+            table_id
+        )
+        .limit(1)
+        .execute()
+    )
+
+
+    if not table_result.data:
+
+        return "Стол не найден", 404
+
+
+    menu_result = (
+        supabase
+        .table("menu_items")
+        .select("*")
+        .eq(
+            "available",
+            True
+        )
+        .order("category")
+        .order("name")
+        .execute()
+    )
+
+
+    menu = (
+        menu_result.data
+        or []
+    )
+
+
+    categories = sorted(
+        set(
+            item["category"]
+            for item in menu
+        )
+    )
+
+
+    return render_template(
+        "guest.html",
+        table_id=table_id,
+        table=table_result.data[0],
+        menu=menu,
+        categories=categories
+    )
+
+
+# =========================================================
+# QR GENERATION
+# =========================================================
+
+@app.route(
+    "/qr/<int:table_number>"
+)
+@role_required(
+    "admin",
+    "manager"
+)
+def qr_table(
+    table_number,
+    user
+):
+
+    table_result = (
+        supabase
+        .table("tables")
+        .select("id,number")
+        .eq(
+            "number",
+            table_number
+        )
+        .limit(1)
+        .execute()
+    )
+
+
+    if not table_result.data:
+
+        return "Стол не найден", 404
+
+
+    os.makedirs(
+        "static/qr",
+        exist_ok=True
+    )
+
+
+    guest_url = url_for(
+        "guest_order",
+        table_id=table_number,
+        _external=True
+    )
+
+
+    file_path = (
+        "static/qr/"
+        f"table_{table_number}.png"
+    )
+
+
+    qr = qrcode.make(
+        guest_url
+    )
+
+    qr.save(file_path)
+
+
+    return redirect(
+        url_for("tables")
     )
 
 
@@ -613,6 +873,7 @@ def create_order():
     data = request.get_json(
         silent=True
     )
+
 
     if not data:
 
@@ -651,26 +912,31 @@ def create_order():
         source = "staff"
 
 
-    if not table_number:
-
-        return jsonify({
-            "success": False,
-            "message":
-                "Не указан столик."
-        }), 400
-
-
-    table = get_table_by_number(
-        table_number
+    table_result = (
+        supabase
+        .table("tables")
+        .select("*")
+        .eq(
+            "number",
+            table_number
+        )
+        .limit(1)
+        .execute()
     )
 
-    if not table:
+
+    if not table_result.data:
 
         return jsonify({
             "success": False,
             "message":
-                "Столик не найден."
+                "Стол не найден."
         }), 404
+
+
+    table = (
+        table_result.data[0]
+    )
 
 
     if not items:
@@ -683,7 +949,6 @@ def create_order():
 
 
     prepared_items = []
-
     total = 0
 
 
@@ -715,7 +980,10 @@ def create_order():
             }), 400
 
 
-        if quantity <= 0 or quantity > 50:
+        if (
+            quantity <= 0
+            or quantity > 50
+        ):
 
             return jsonify({
                 "success": False,
@@ -724,48 +992,53 @@ def create_order():
             }), 400
 
 
-        menu_item = get_menu_item(
-            item_id
+        menu_result = (
+            supabase
+            .table("menu_items")
+            .select("*")
+            .eq(
+                "id",
+                item_id
+            )
+            .eq(
+                "available",
+                True
+            )
+            .limit(1)
+            .execute()
         )
 
 
-        if not menu_item:
+        if not menu_result.data:
 
             return jsonify({
                 "success": False,
                 "message":
-                    "Блюдо не найдено."
+                    "Блюдо недоступно."
             }), 400
 
 
-        if not menu_item["available"]:
-
-            return jsonify({
-                "success": False,
-                "message":
-                    f'Блюдо "{menu_item["name"]}" '
-                    f'сейчас недоступно.'
-            }), 400
+        item = (
+            menu_result.data[0]
+        )
 
 
-        item_total = (
-            menu_item["price"]
+        line_total = (
+            item["price"]
             * quantity
         )
 
-        total += item_total
+
+        total += line_total
 
 
         prepared_items.append({
             "menu_item_id":
-                menu_item["id"],
-
+                item["id"],
             "name":
-                menu_item["name"],
-
+                item["name"],
             "price":
-                menu_item["price"],
-
+                item["price"],
             "quantity":
                 quantity
         })
@@ -777,10 +1050,6 @@ def create_order():
         .upper()
     )
 
-
-    # -----------------------------------------
-    # CREATE ORDER
-    # -----------------------------------------
 
     order_result = (
         supabase
@@ -820,20 +1089,16 @@ def create_order():
         }), 500
 
 
-    order = order_result.data[0]
+    order = (
+        order_result.data[0]
+    )
 
-
-    # -----------------------------------------
-    # CREATE ORDER ITEMS
-    # -----------------------------------------
 
     order_items = []
-
 
     for item in prepared_items:
 
         order_items.append({
-
             "order_id":
                 order["id"],
 
@@ -859,183 +1124,26 @@ def create_order():
     )
 
 
-    # -----------------------------------------
-    # TABLE → BUSY
-    # -----------------------------------------
-
-    update_table_status(
-        table["id"],
-        "busy"
-    )
-
-
-    return jsonify({
-
-        "success": True,
-
-        "order_id":
-            public_id,
-
-        "total":
-            total
-    })
-
-
-# =========================================================
-# RECEIPT
-# =========================================================
-
-@app.route(
-    "/receipt/<public_id>"
-)
-def receipt(public_id):
-
-    order = get_order_by_public_id(
-        public_id
-    )
-
-    if not order:
-        return "Заказ не найден", 404
-
-
-    items = get_order_items(
-        order["id"]
-    )
-
-
-    return render_template(
-        "receipt.html",
-        order=order,
-        items=items
-    )
-
-
-# =========================================================
-# PAYMENT PAGE
-# =========================================================
-
-@app.route(
-    "/pay/<public_id>"
-)
-def pay(public_id):
-
-    order = get_order_by_public_id(
-        public_id
-    )
-
-    if not order:
-        return "Заказ не найден", 404
-
-
-    return render_template(
-        "receipt.html",
-        order=order,
-        items=[],
-        payment_page=True
-    )
-
-
-# =========================================================
-# DEMO PAYMENT
-# =========================================================
-
-@app.route(
-    "/api/payment/demo",
-    methods=["POST"]
-)
-def demo_payment():
-
-    data = request.get_json(
-        silent=True
-    )
-
-    if not data:
-
-        return jsonify({
-            "success": False
-        }), 400
-
-
-    public_id = data.get(
-        "order_id"
-    )
-
-
-    if not public_id:
-
-        return jsonify({
-            "success": False
-        }), 400
-
-
-    order = get_order_by_public_id(
-        public_id
-    )
-
-
-    if not order:
-
-        return jsonify({
-            "success": False,
-            "message":
-                "Заказ не найден."
-        }), 404
-
-
-    # -----------------------------------------
-    # UPDATE ORDER
-    # -----------------------------------------
-
     (
         supabase
-        .table("orders")
+        .table("tables")
         .update({
-            "payment_status":
-                "paid",
-
-            "status":
-                "confirmed",
-
-            "updated_at":
-                datetime.now().isoformat()
+            "status": "busy"
         })
         .eq(
             "id",
-            order["id"]
+            table["id"]
         )
         .execute()
     )
 
 
-    # -----------------------------------------
-    # CREATE PAYMENT RECORD
-    # -----------------------------------------
-
-    (
-        supabase
-        .table("payments")
-        .insert({
-            "order_id":
-                order["id"],
-
-            "provider":
-                "demo",
-
-            "provider_payment_id":
-                uuid.uuid4().hex,
-
-            "amount":
-                order["total"],
-
-            "status":
-                "paid"
-        })
-        .execute()
-    )
-
-
     return jsonify({
-        "success": True
+        "success": True,
+        "order_id":
+            public_id,
+        "total":
+            total
     })
 
 
@@ -1044,53 +1152,84 @@ def demo_payment():
 # =========================================================
 
 @app.route("/kitchen")
-def kitchen():
+@role_required(
+    "admin",
+    "manager",
+    "cook"
+)
+def kitchen(user):
 
-    try:
+    result = (
+        supabase
+        .table("orders")
+        .select("*")
+        .neq(
+            "status",
+            "completed"
+        )
+        .neq(
+            "status",
+            "cancelled"
+        )
+        .order(
+            "created_at",
+            desc=True
+        )
+        .execute()
+    )
 
-        result = (
+
+    orders = (
+        result.data
+        or []
+    )
+
+
+    for order in orders:
+
+        items_result = (
             supabase
-            .table("orders")
+            .table("order_items")
             .select("*")
-            .neq("status", "completed")
-            .neq("status", "cancelled")
-            .order("created_at", desc=True)
+            .eq(
+                "order_id",
+                order["id"]
+            )
+            .order("id")
             .execute()
         )
 
-        orders = result.data or []
 
-
-        for order in orders:
-
-            order["items"] = get_order_items(
-                order["id"]
-            )
-
-
-        return render_template(
-            "kitchen.html",
-            orders=orders
+        order["items"] = (
+            items_result.data
+            or []
         )
 
 
-    except Exception as error:
-
-        return f"""
-        <h1>Ошибка кухни</h1>
-        <p>{format_error(error)}</p>
-        """, 500
+    return render_template(
+        "kitchen.html",
+        user=user,
+        orders=orders
+    )
 
 
 # =========================================================
-# UPDATE ORDER STATUS
+# ORDER STATUS
 # =========================================================
 
 @app.route(
     "/api/orders/<public_id>/status",
     methods=["POST"]
 )
-def update_order_status(public_id):
+@role_required(
+    "admin",
+    "manager",
+    "cook"
+)
+def update_order_status(
+    public_id,
+    user
+):
 
     data = request.get_json(
         silent=True
@@ -1124,30 +1263,37 @@ def update_order_status(public_id):
     if status not in allowed_statuses:
 
         return jsonify({
-
             "success": False,
-
             "message":
                 "Недопустимый статус."
-
         }), 400
 
 
-    order = get_order_by_public_id(
-        public_id
+    order_result = (
+        supabase
+        .table("orders")
+        .select("*")
+        .eq(
+            "public_id",
+            public_id
+        )
+        .limit(1)
+        .execute()
     )
 
 
-    if not order:
+    if not order_result.data:
 
         return jsonify({
-
             "success": False,
-
             "message":
                 "Заказ не найден."
-
         }), 404
+
+
+    order = (
+        order_result.data[0]
+    )
 
 
     (
@@ -1168,52 +1314,270 @@ def update_order_status(public_id):
     )
 
 
-    # -----------------------------------------
-    # TABLE STATUS
-    # -----------------------------------------
+    if order.get("table_id"):
 
-    if status in {
-        "new",
-        "accepted",
-        "cooking",
-        "ready",
-        "confirmed"
-    }:
+        new_table_status = "busy"
 
-        if order["table_id"]:
 
-            update_table_status(
-                order["table_id"],
-                "busy"
+        if status in {
+            "served",
+            "completed",
+            "cancelled"
+        }:
+
+            new_table_status = "free"
+
+
+        (
+            supabase
+            .table("tables")
+            .update({
+                "status":
+                    new_table_status
+            })
+            .eq(
+                "id",
+                order["table_id"]
             )
-
-
-    elif status in {
-        "served",
-        "completed"
-    }:
-
-        if order["table_id"]:
-
-            update_table_status(
-                order["table_id"],
-                "free"
-            )
-
-
-    elif status == "cancelled":
-
-        if order["table_id"]:
-
-            update_table_status(
-                order["table_id"],
-                "free"
-            )
+            .execute()
+        )
 
 
     return jsonify({
-        "success": True
+        "success":
+            True
     })
+
+
+# =========================================================
+# RECEIPT
+# =========================================================
+
+@app.route(
+    "/receipt/<public_id>"
+)
+def receipt(public_id):
+
+    result = (
+        supabase
+        .table("orders")
+        .select("*")
+        .eq(
+            "public_id",
+            public_id
+        )
+        .limit(1)
+        .execute()
+    )
+
+
+    if not result.data:
+
+        return "Заказ не найден", 404
+
+
+    order = (
+        result.data[0]
+    )
+
+
+    items_result = (
+        supabase
+        .table("order_items")
+        .select("*")
+        .eq(
+            "order_id",
+            order["id"]
+        )
+        .order("id")
+        .execute()
+    )
+
+
+    return render_template(
+        "receipt.html",
+        order=order,
+        items=(
+            items_result.data
+            or []
+        )
+    )
+
+
+# =========================================================
+# PAYMENT PAGE
+# =========================================================
+
+@app.route(
+    "/pay/<public_id>"
+)
+def pay(public_id):
+
+    result = (
+        supabase
+        .table("orders")
+        .select("*")
+        .eq(
+            "public_id",
+            public_id
+        )
+        .limit(1)
+        .execute()
+    )
+
+
+    if not result.data:
+
+        return "Заказ не найден", 404
+
+
+    return render_template(
+        "receipt.html",
+        order=result.data[0],
+        items=[],
+        payment_page=True
+    )
+
+
+# =========================================================
+# DEMO PAYMENT
+# =========================================================
+
+@app.route(
+    "/api/payment/demo",
+    methods=["POST"]
+)
+def demo_payment():
+
+    data = request.get_json(
+        silent=True
+    )
+
+
+    if not data:
+
+        return jsonify({
+            "success": False
+        }), 400
+
+
+    public_id = data.get(
+        "order_id"
+    )
+
+
+    result = (
+        supabase
+        .table("orders")
+        .select("*")
+        .eq(
+            "public_id",
+            public_id
+        )
+        .limit(1)
+        .execute()
+    )
+
+
+    if not result.data:
+
+        return jsonify({
+            "success": False,
+            "message":
+                "Заказ не найден."
+        }), 404
+
+
+    order = (
+        result.data[0]
+    )
+
+
+    (
+        supabase
+        .table("orders")
+        .update({
+            "payment_status":
+                "paid",
+
+            "status":
+                "confirmed",
+
+            "updated_at":
+                datetime.now().isoformat()
+        })
+        .eq(
+            "id",
+            order["id"]
+        )
+        .execute()
+    )
+
+
+    (
+        supabase
+        .table("payments")
+        .insert({
+            "order_id":
+                order["id"],
+
+            "provider":
+                "demo",
+
+            "provider_payment_id":
+                uuid.uuid4().hex,
+
+            "amount":
+                order["total"],
+
+            "status":
+                "paid"
+        })
+        .execute()
+    )
+
+
+    return jsonify({
+        "success":
+            True
+    })
+
+
+# =========================================================
+# HEALTH CHECK
+# =========================================================
+
+@app.route("/health")
+def health():
+
+    try:
+
+        result = (
+            supabase
+            .table("menu_items")
+            .select("id")
+            .limit(1)
+            .execute()
+        )
+
+        return jsonify({
+            "status":
+                "ok",
+
+            "supabase":
+                "connected"
+        })
+
+
+    except Exception as error:
+
+        return jsonify({
+            "status":
+                "error",
+
+            "message":
+                str(error)
+        }), 500
 
 
 # =========================================================

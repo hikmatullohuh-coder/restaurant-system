@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Вход — Restaurant OS</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body class="login-page">
+
+    <div class="login-card">
+
+        <div class="login-logo">
+            R
+        </div>
+
+        <div class="login-title">
+            Restaurant OS
+        </div>
+
+        <p class="login-subtitle">
+            Вход для сотрудников ресторана
+        </p>
+
+        {% if error %}
+
+            <div class="login-error">
+                {{ error }}
+            </div>
+
+        {% endif %}
+
+        <form method="POST"
+              class="login-form">
+
+            <label>
+                Email
+            </label>
+
+            <input
+                type="email"
+                name="email"
+                placeholder="admin@restaurant.local"
+                required
+            >
+
+            <label>
+                Пароль
+            </label>
+
+            <input
+                type="password"
+                name="password"
+                placeholder="Введите пароль"
+                required
+            >
+
+            <button
+                type="submit"
+                class="login-button">
+
+                Войти
+
+            </button>
+
+        </form>
+
+        <div class="login-note">
+            Доступ только для сотрудников ресторана
+        </div>
+
+    </div>
+
+</body>
+
+</html>
